@@ -1,4 +1,5 @@
 name: CI - Build, Container Security & SARIF Upload
+# Comprehensive CI pipeline with security scanning
 
 on:
   push:
