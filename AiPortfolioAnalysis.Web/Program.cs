@@ -55,7 +55,7 @@ builder.Services.AddCors(options =>
 // Configure SPA services
 builder.Services.AddSpaStaticFiles(configuration =>
 {
-    configuration.RootPath = "ClientApp/dist/ClientApp";
+    configuration.RootPath = "wwwroot";
 });
 
 var app = builder.Build();
@@ -149,7 +149,12 @@ app.MapWhen(x => !x.Request.Path.Value?.StartsWith("/weatherforecast") == true &
 {
     builder.UseSpa(spa =>
     {
-        spa.Options.SourcePath = "ClientApp";
+        spa.Options.SourcePath = "wwwroot";
+        spa.Options.DefaultPageStaticFileOptions = new StaticFileOptions
+        {
+            FileProvider = new Microsoft.Extensions.FileProviders.PhysicalFileProvider(
+                Path.Combine(app.Environment.ContentRootPath, "wwwroot"))
+        };
 
         if (app.Environment.IsDevelopment())
         {
