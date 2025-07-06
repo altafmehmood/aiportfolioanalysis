@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
+import { environment } from '../../environments/environment';
 
 export interface WeatherForecast {
   date: string;
@@ -13,7 +14,7 @@ export interface WeatherForecast {
   providedIn: 'root'
 })
 export class WeatherService {
-  private apiUrl = 'http://localhost:5006/weatherforecast';
+  private apiUrl = `${environment.apiUrl}/weatherforecast`;
 
   constructor(private http: HttpClient) { }
 
