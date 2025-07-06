@@ -177,25 +177,40 @@ export class DashboardComponent implements OnInit {
       if (params['user']) {
         try {
           const userData = JSON.parse(decodeURIComponent(params['user']));
+          this.authService.setUser(userData);
           this.user = userData;
           // Remove query params from URL
           this.router.navigate([], { queryParams: {} });
+          // Load weather data after successful login
+          this.loadWeatherForecast();
         } catch (e) {
           console.error('Error parsing user data from URL');
+          this.checkAuthAndRedirect();
         }
+      } else {
+        this.checkAuthAndRedirect();
       }
     });
 
     // Subscribe to auth service for user updates
     this.authService.user$.subscribe(user => {
       this.user = user;
-      if (!user) {
-        this.router.navigate(['/login']);
-      }
     });
+  }
 
-    // Load weather data
-    this.loadWeatherForecast();
+  private checkAuthAndRedirect(): void {
+    // Initialize auth check
+    this.authService.initializeAuth();
+    
+    // Wait a moment for auth to initialize, then check
+    setTimeout(() => {
+      if (!this.authService.isAuthenticated) {
+        this.router.navigate(['/login']);
+      } else {
+        this.user = this.authService.currentUser;
+        this.loadWeatherForecast();
+      }
+    }, 100);
   }
 
   loadWeatherForecast(): void {

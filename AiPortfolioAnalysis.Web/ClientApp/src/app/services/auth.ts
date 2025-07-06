@@ -15,25 +15,38 @@ export interface User {
 export class AuthService {
   private userSubject = new BehaviorSubject<User | null>(null);
   public user$ = this.userSubject.asObservable();
+  private initialized = false;
 
-  constructor(private http: HttpClient) {
-    this.checkAuthStatus();
-  }
+  constructor(private http: HttpClient) {}
 
   login(): void {
     window.location.href = `${environment.apiUrl}/api/auth/login`;
   }
 
   logout(): Observable<any> {
-    return this.http.post(`${environment.apiUrl}/api/auth/logout`, {});
+    return this.http.post(`${environment.apiUrl}/api/auth/logout`, {}, {
+      withCredentials: true
+    });
   }
 
-  checkAuthStatus(): void {
-    this.http.get<User>(`${environment.apiUrl}/api/auth/user`)
-      .subscribe({
-        next: (user) => this.userSubject.next(user),
-        error: () => this.userSubject.next(null)
-      });
+  checkAuthStatus(): Observable<User> {
+    return this.http.get<User>(`${environment.apiUrl}/api/auth/user`, {
+      withCredentials: true
+    });
+  }
+
+  initializeAuth(): void {
+    if (this.initialized) return;
+    this.initialized = true;
+    
+    this.checkAuthStatus().subscribe({
+      next: (user) => this.userSubject.next(user),
+      error: () => this.userSubject.next(null)
+    });
+  }
+
+  setUser(user: User): void {
+    this.userSubject.next(user);
   }
 
   get currentUser(): User | null {
