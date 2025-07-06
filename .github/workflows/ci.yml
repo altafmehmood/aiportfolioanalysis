@@ -73,4 +73,30 @@ jobs:
       uses: github/codeql-action/upload-sarif@v3
       with:
         sarif_file: 'trivy-results.sarif'
+      continue-on-error: true
       if: always() && hashFiles('trivy-results.sarif') != ''
+
+    - name: Archive security scan results
+      uses: actions/upload-artifact@v4
+      with:
+        name: trivy-security-scan-results
+        path: trivy-results.sarif
+        retention-days: 30
+      if: always() && hashFiles('trivy-results.sarif') != ''
+
+    - name: Display security scan info
+      run: |
+        if [ -f "trivy-results.sarif" ]; then
+          echo "🔍 Security scan completed successfully"
+          echo "📄 SARIF report generated: trivy-results.sarif"
+          echo ""
+          echo "📊 To enable automatic security alerts in GitHub:"
+          echo "1. Go to repository Settings → Security & analysis"
+          echo "2. Enable 'Code scanning alerts'"
+          echo "3. Security scan results will appear in the Security tab"
+          echo ""
+          echo "📁 Security scan results are available as build artifacts"
+        else
+          echo "❌ Security scan did not complete successfully"
+        fi
+      if: always()
