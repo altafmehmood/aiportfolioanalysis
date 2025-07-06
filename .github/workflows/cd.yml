@@ -1,0 +1,97 @@
+name: CD - Deploy to Azure Container Instance
+
+on:
+  workflow_run:
+    workflows: ["CI - Build and Push to Azure Container Registry"]
+    types:
+      - completed
+    branches: [ main ]
+
+env:
+  REGISTRY: ${{ secrets.ACR_REGISTRY }}
+  IMAGE_NAME: aiportfolioanalysis
+  ACI_RESOURCE_GROUP: ${{ secrets.ACI_RESOURCE_GROUP }}
+  ACI_NAME: ${{ secrets.ACI_NAME }}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    environment: production
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Azure Login
+      uses: azure/login@v1
+      with:
+        creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+    - name: Get image tag
+      id: image
+      run: |
+        echo "tag=${{ github.sha }}" >> $GITHUB_OUTPUT
+        TAG=$(echo "${{ github.ref_name }}-${{ github.sha }}" | sed 's/[^a-zA-Z0-9._-]/-/g')
+        echo "image=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:$TAG" >> $GITHUB_OUTPUT
+
+    - name: Deploy to Azure Container Instance
+      uses: azure/aci-deploy@v1
+      with:
+        resource-group: ${{ env.ACI_RESOURCE_GROUP }}
+        dns-name-label: ${{ env.ACI_NAME }}
+        image: ${{ steps.image.outputs.image }}
+        name: ${{ env.ACI_NAME }}
+        location: 'South Central US'
+        ports: '8080'
+        cpu: 0.1
+        memory: 0.2
+        registry-login-server: ${{ env.REGISTRY }}
+        registry-username: ${{ secrets.ACR_USERNAME }}
+        registry-password: ${{ secrets.ACR_PASSWORD }}
+        environment-variables: |
+          ASPNETCORE_ENVIRONMENT=Production
+          ASPNETCORE_URLS=http://+:8080
+        secure-environment-variables: |
+          ConnectionStrings__DefaultConnection=${{ secrets.CONNECTION_STRING }}
+          Authentication__Google__ClientId=${{ secrets.GOOGLE_CLIENT_ID }}
+          Authentication__Google__ClientSecret=${{ secrets.GOOGLE_CLIENT_SECRET }}
+
+    - name: Verify deployment
+      run: |
+        echo "Waiting for container to start..."
+        sleep 30
+        
+        # Get the FQDN of the container instance
+        FQDN=$(az container show \
+          --resource-group ${{ env.ACI_RESOURCE_GROUP }} \
+          --name ${{ env.ACI_NAME }} \
+          --query ipAddress.fqdn \
+          --output tsv)
+        
+        echo "Container FQDN: $FQDN"
+        
+        # Health check
+        HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://$FQDN || echo "000")
+        
+        if [ "$HTTP_STATUS" -eq 200 ]; then
+          echo "✅ Deployment successful - Application is responding"
+          echo "🌐 Application URL: http://$FQDN"
+        else
+          echo "❌ Deployment failed - HTTP Status: $HTTP_STATUS"
+          exit 1
+        fi
+
+    - name: Create deployment summary
+      run: |
+        FQDN=$(az container show \
+          --resource-group ${{ env.ACI_RESOURCE_GROUP }} \
+          --name ${{ env.ACI_NAME }} \
+          --query ipAddress.fqdn \
+          --output tsv)
+        
+        echo "## 🚀 Deployment Summary" >> $GITHUB_STEP_SUMMARY
+        echo "- **Environment**: Production" >> $GITHUB_STEP_SUMMARY
+        echo "- **Image**: ${{ steps.image.outputs.image }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **URL**: http://$FQDN" >> $GITHUB_STEP_SUMMARY
+        echo "- **Status**: ✅ Successfully deployed" >> $GITHUB_STEP_SUMMARY
