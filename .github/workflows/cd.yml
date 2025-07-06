@@ -32,7 +32,8 @@ jobs:
       id: image
       run: |
         echo "tag=${{ github.sha }}" >> $GITHUB_OUTPUT
-        echo "image=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:main-${{ github.sha }}" >> $GITHUB_OUTPUT
+        TAG=$(echo "${{ github.ref_name }}-${{ github.sha }}" | sed 's/[^a-zA-Z0-9._-]/-/g')
+        echo "image=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:$TAG" >> $GITHUB_OUTPUT
 
     - name: Deploy to Azure Container Instance
       uses: azure/aci-deploy@v1
@@ -41,16 +42,16 @@ jobs:
         dns-name-label: ${{ env.ACI_NAME }}
         image: ${{ steps.image.outputs.image }}
         name: ${{ env.ACI_NAME }}
-        location: 'East US'
-        ports: '80'
-        cpu: 1
-        memory: 1.5
+        location: 'South Central US'
+        ports: '8080'
+        cpu: 0.1
+        memory: 0.2
         registry-login-server: ${{ env.REGISTRY }}
         registry-username: ${{ secrets.ACR_USERNAME }}
         registry-password: ${{ secrets.ACR_PASSWORD }}
         environment-variables: |
           ASPNETCORE_ENVIRONMENT=Production
-          ASPNETCORE_URLS=http://+:80
+          ASPNETCORE_URLS=http://+:8080
         secure-environment-variables: |
           ConnectionStrings__DefaultConnection=${{ secrets.CONNECTION_STRING }}
           Authentication__Google__ClientId=${{ secrets.GOOGLE_CLIENT_ID }}

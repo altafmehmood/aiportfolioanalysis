@@ -19,7 +19,10 @@ RUN dotnet publish AiPortfolioAnalysis.Web/AiPortfolioAnalysis.Web.csproj -c Rel
 # Runtime stage
 FROM mcr.microsoft.com/dotnet/aspnet:9.0-alpine AS runtime
 WORKDIR /app
+RUN addgroup -g 1001 -S appuser && adduser -S appuser -G appuser
 COPY --from=backend-build /app/out .
+RUN chown -R appuser:appuser /app
+USER appuser
 EXPOSE 8080
 ENV ASPNETCORE_URLS=http://+:8080
 ENTRYPOINT ["dotnet", "AiPortfolioAnalysis.Web.dll"]
