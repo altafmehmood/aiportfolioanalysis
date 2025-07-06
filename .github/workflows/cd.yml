@@ -62,10 +62,6 @@ jobs:
         environment-variables: |
           ASPNETCORE_ENVIRONMENT=Production
           ASPNETCORE_URLS=http://+:8080
-        secure-environment-variables: |
-          ConnectionStrings__DefaultConnection=${{ secrets.CONNECTION_STRING }}
-          Authentication__Google__ClientId=${{ secrets.GOOGLE_CLIENT_ID }}
-          Authentication__Google__ClientSecret=${{ secrets.GOOGLE_CLIENT_SECRET }}
 
     - name: Verify deployment
       run: |
