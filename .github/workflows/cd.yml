@@ -41,9 +41,10 @@ jobs:
     - name: Get image tag
       id: image
       run: |
-        echo "tag=${{ github.sha }}" >> $GITHUB_OUTPUT
-        TAG=$(echo "${{ github.ref_name }}-${{ github.sha }}" | sed 's/[^a-zA-Z0-9._-]/-/g')
-        echo "image=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:$TAG" >> $GITHUB_OUTPUT
+        # Use the same tagging format as CI: sha-{short-commit}
+        SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
+        echo "tag=sha-$SHORT_SHA" >> $GITHUB_OUTPUT
+        echo "image=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:sha-$SHORT_SHA" >> $GITHUB_OUTPUT
 
     - name: Deploy to Azure Container Instance
       uses: azure/aci-deploy@v1
