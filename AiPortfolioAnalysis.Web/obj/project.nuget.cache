@@ -1,0 +1,16 @@
+{
+  "version": 2,
+  "dgSpecHash": "HNVmJkFaHuw=",
+  "success": true,
+  "projectFilePath": "/Users/altafmehmood/Repos/aiportfolioanalysis/AiPortfolioAnalysis.Web/AiPortfolioAnalysis.Web.csproj",
+  "expectedPackageFiles": [
+    "/Users/altafmehmood/.nuget/packages/microsoft.aspnetcore.openapi/9.0.6/microsoft.aspnetcore.openapi.9.0.6.nupkg.sha512",
+    "/Users/altafmehmood/.nuget/packages/microsoft.aspnetcore.spaservices.extensions/9.0.6/microsoft.aspnetcore.spaservices.extensions.9.0.6.nupkg.sha512",
+    "/Users/altafmehmood/.nuget/packages/microsoft.extensions.fileproviders.abstractions/9.0.6/microsoft.extensions.fileproviders.abstractions.9.0.6.nupkg.sha512",
+    "/Users/altafmehmood/.nuget/packages/microsoft.extensions.fileproviders.physical/9.0.6/microsoft.extensions.fileproviders.physical.9.0.6.nupkg.sha512",
+    "/Users/altafmehmood/.nuget/packages/microsoft.extensions.filesystemglobbing/9.0.6/microsoft.extensions.filesystemglobbing.9.0.6.nupkg.sha512",
+    "/Users/altafmehmood/.nuget/packages/microsoft.extensions.primitives/9.0.6/microsoft.extensions.primitives.9.0.6.nupkg.sha512",
+    "/Users/altafmehmood/.nuget/packages/microsoft.openapi/1.6.17/microsoft.openapi.1.6.17.nupkg.sha512"
+  ],
+  "logs": []
+}

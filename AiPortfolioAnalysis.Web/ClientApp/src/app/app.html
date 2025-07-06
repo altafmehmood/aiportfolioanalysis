@@ -1,0 +1,20 @@
+<div class="container">
+  <h1>{{ title }}</h1>
+  
+  <div class="weather-section">
+    <h2>Weather Forecast</h2>
+    <div class="weather-grid" *ngIf="weatherForecast.length > 0; else noData">
+      <div class="weather-card" *ngFor="let forecast of weatherForecast">
+        <h3>{{ forecast.date | date:'shortDate' }}</h3>
+        <p><strong>Temperature:</strong> {{ forecast.temperatureC }}°C / {{ forecast.temperatureF }}°F</p>
+        <p><strong>Summary:</strong> {{ forecast.summary }}</p>
+      </div>
+    </div>
+    
+    <ng-template #noData>
+      <p>Loading weather data...</p>
+    </ng-template>
+  </div>
+  
+  <router-outlet></router-outlet>
+</div>
