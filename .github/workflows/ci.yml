@@ -1,4 +1,4 @@
-name: CI - Build and Push to Azure Container Registry
+name: CI - Build, Container Security & SARIF Upload
 
 on:
   push:
@@ -16,8 +16,8 @@ jobs:
     permissions:
       contents: read
       packages: write
-      security-events: write
-      actions: read
+      security-events: write  # Required for SARIF upload to GitHub Security tab
+      actions: read          # Required for accessing workflow run metadata
 
     steps:
     - name: Checkout repository
@@ -54,7 +54,7 @@ jobs:
         labels: ${{ steps.meta.outputs.labels }}
 
     - name: Run security scan on local image (PR)
-      uses: aquasecurity/trivy-action@master
+      uses: aquasecurity/trivy-action@0.28.0
       with:
         image-ref: ${{ fromJSON(steps.meta.outputs.json).tags[0] }}
         format: 'sarif'
@@ -62,7 +62,7 @@ jobs:
       if: github.event_name == 'pull_request'
 
     - name: Run security scan on pushed image (Push)
-      uses: aquasecurity/trivy-action@master
+      uses: aquasecurity/trivy-action@0.28.0
       with:
         image-ref: ${{ fromJSON(steps.meta.outputs.json).tags[0] }}
         format: 'sarif'
