@@ -14,7 +14,7 @@ COPY AiPortfolioAnalysis.Web/*.csproj ./AiPortfolioAnalysis.Web/
 RUN dotnet restore
 COPY AiPortfolioAnalysis.Web/ ./AiPortfolioAnalysis.Web/
 COPY --from=frontend-build /app/clientapp/dist ./AiPortfolioAnalysis.Web/wwwroot/
-RUN dotnet publish AiPortfolioAnalysis.Web/AiPortfolioAnalysis.Web.csproj -c Release -o out /p:PublishRunWebpack=false
+RUN dotnet publish AiPortfolioAnalysis.Web/AiPortfolioAnalysis.Web.csproj -c Release -o out -p:BuildingInDocker=true
 
 # Runtime stage
 FROM mcr.microsoft.com/dotnet/aspnet:9.0-alpine AS runtime
