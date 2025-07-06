@@ -38,34 +38,49 @@
 
 ## Application Configuration
 
-### 1. Update appsettings.Development.json
+### 1. Configure User Secrets (Recommended for Development)
 
-Replace the placeholder values in `AiPortfolioAnalysis.Web/appsettings.Development.json`:
+The project is already configured with user secrets. Set your Google OAuth credentials securely:
 
-```json
-{
-  "Authentication": {
-    "Google": {
-      "ClientId": "YOUR_ACTUAL_GOOGLE_CLIENT_ID",
-      "ClientSecret": "YOUR_ACTUAL_GOOGLE_CLIENT_SECRET"
-    }
-  }
-}
+```bash
+# Navigate to the project directory
+cd AiPortfolioAnalysis.Web
+
+# Set your Google OAuth credentials (replace with your actual values)
+dotnet user-secrets set "Authentication:Google:ClientId" "YOUR_ACTUAL_GOOGLE_CLIENT_ID"
+dotnet user-secrets set "Authentication:Google:ClientSecret" "YOUR_ACTUAL_GOOGLE_CLIENT_SECRET"
+
+# Verify the secrets were set correctly
+dotnet user-secrets list
 ```
 
-### 2. For Production
+**Benefits of User Secrets:**
+- ✅ Credentials never committed to git
+- ✅ Stored securely on your local machine
+- ✅ Automatically loaded by .NET in Development environment
+- ✅ Shared safely across team members without exposing sensitive data
 
-Create `appsettings.Production.json` with your production Google OAuth credentials:
+### 2. Alternative: Environment Variables
 
-```json
-{
-  "Authentication": {
-    "Google": {
-      "ClientId": "YOUR_PRODUCTION_GOOGLE_CLIENT_ID",
-      "ClientSecret": "YOUR_PRODUCTION_GOOGLE_CLIENT_SECRET"
-    }
-  }
-}
+You can also use environment variables instead of user secrets:
+
+```bash
+export Authentication__Google__ClientId="YOUR_ACTUAL_GOOGLE_CLIENT_ID"
+export Authentication__Google__ClientSecret="YOUR_ACTUAL_GOOGLE_CLIENT_SECRET"
+```
+
+### 3. For Production
+
+Use secure configuration management:
+- **Azure**: Azure Key Vault
+- **AWS**: AWS Secrets Manager  
+- **Docker**: Environment variables
+- **Kubernetes**: Kubernetes Secrets
+
+Example for environment variables in production:
+```bash
+Authentication__Google__ClientId=YOUR_PRODUCTION_CLIENT_ID
+Authentication__Google__ClientSecret=YOUR_PRODUCTION_CLIENT_SECRET
 ```
 
 ## Running the Application
