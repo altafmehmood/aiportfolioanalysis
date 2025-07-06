@@ -7,10 +7,17 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddOpenApi();
 
 // Add Authentication
-builder.Services.AddAuthentication(options =>
+var googleClientId = builder.Configuration["Authentication:Google:ClientId"];
+var googleClientSecret = builder.Configuration["Authentication:Google:ClientSecret"];
+var hasGoogleAuth = !string.IsNullOrEmpty(googleClientId) && !string.IsNullOrEmpty(googleClientSecret);
+
+var authBuilder = builder.Services.AddAuthentication(options =>
 {
     options.DefaultScheme = "Cookies";
-    options.DefaultChallengeScheme = "Google";
+    if (hasGoogleAuth)
+    {
+        options.DefaultChallengeScheme = "Google";
+    }
 })
 .AddCookie("Cookies", options =>
 {
@@ -19,13 +26,17 @@ builder.Services.AddAuthentication(options =>
     options.Cookie.HttpOnly = false; // Allow JavaScript access for SPA
     options.ExpireTimeSpan = TimeSpan.FromDays(30);
     options.SlidingExpiration = true;
-})
-.AddGoogle("Google", options =>
-{
-    options.ClientId = builder.Configuration["Authentication:Google:ClientId"] ?? "";
-    options.ClientSecret = builder.Configuration["Authentication:Google:ClientSecret"] ?? "";
-    options.CallbackPath = "/signin-google";
 });
+
+if (hasGoogleAuth)
+{
+    authBuilder.AddGoogle("Google", options =>
+    {
+        options.ClientId = googleClientId!;
+        options.ClientSecret = googleClientSecret!;
+        options.CallbackPath = "/signin-google";
+    });
+}
 
 builder.Services.AddAuthorization();
 
@@ -68,6 +79,10 @@ var summaries = new[]
 // Authentication endpoints
 app.MapGet("/api/auth/login", () => 
 {
+    if (!hasGoogleAuth)
+    {
+        return Results.BadRequest(new { error = "Google authentication not configured" });
+    }
     return Results.Challenge(new AuthenticationProperties 
     { 
         RedirectUri = "/api/auth/callback" 
