@@ -1,5 +1,5 @@
 name: CD - Deploy to Azure Container Instance
-# Automated deployment to Azure Container Instance
+# Automated deployment to Azure Container Instance with individual secrets
 
 on:
   workflow_run:
