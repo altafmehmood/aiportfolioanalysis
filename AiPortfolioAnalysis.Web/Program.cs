@@ -1,4 +1,6 @@
 using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Http.Extensions;
+using System.Collections;
 using System.Security.Claims;
 using System.Text.Json;
 
@@ -54,12 +56,35 @@ if (hasGoogleAuth)
 
 builder.Services.AddAuthorization();
 
-// Get frontend URL configuration with validation
-var frontendUrl = builder.Configuration["Frontend:BaseUrl"] ?? "http://localhost:4200";
+// Get frontend URL configuration with validation and logging
+// Use environment-aware fallback
+var defaultFrontendUrl = builder.Environment.IsDevelopment() ? "http://localhost:4200" : "http://example.com";
+var frontendUrl = builder.Configuration["Frontend:BaseUrl"] ?? defaultFrontendUrl;
+var configLogger = LoggerFactory.Create(config => config.AddConsole()).CreateLogger("Configuration");
+configLogger.LogInformation("=== Frontend URL Configuration ====");
+configLogger.LogInformation("Environment: {Environment}", builder.Environment.EnvironmentName);
+configLogger.LogInformation("Frontend:BaseUrl from config: {FrontendUrl}", frontendUrl);
+configLogger.LogInformation("All Frontend configuration values:");
+foreach (var config in builder.Configuration.AsEnumerable().Where(c => c.Key.StartsWith("Frontend")))
+{
+    configLogger.LogInformation("  {Key} = {Value}", config.Key, config.Value);
+}
+configLogger.LogInformation("Environment variables related to Frontend:");
+foreach (DictionaryEntry envVar in Environment.GetEnvironmentVariables())
+{
+    var key = envVar.Key.ToString();
+    if (key?.Contains("Frontend", StringComparison.OrdinalIgnoreCase) == true)
+    {
+        configLogger.LogInformation("  ENV {Key} = {Value}", key, envVar.Value);
+    }
+}
 if (!Uri.TryCreate(frontendUrl, UriKind.Absolute, out var frontendUri))
 {
+    configLogger.LogError("Invalid Frontend:BaseUrl configuration: '{FrontendUrl}'. Must be a valid absolute URL.", frontendUrl);
     throw new InvalidOperationException($"Invalid Frontend:BaseUrl configuration: '{frontendUrl}'. Must be a valid absolute URL.");
 }
+configLogger.LogInformation("Final frontend URL: {FrontendUrl}", frontendUrl);
+configLogger.LogInformation("======================================");
 builder.Services.AddCors(options =>
 {
     options.AddDefaultPolicy(corsBuilder =>
@@ -110,12 +135,20 @@ var summaries = new[]
 };
 
 // Authentication endpoints
-app.MapGet("/api/auth/login", () => 
+app.MapGet("/api/auth/login", (HttpContext context) => 
 {
+    app.Logger.LogInformation("=== OAuth Login Initiated ===");
+    app.Logger.LogInformation("Request URL: {RequestUrl}", context.Request.GetDisplayUrl());
+    app.Logger.LogInformation("Has Google Auth: {HasGoogleAuth}", hasGoogleAuth);
+    app.Logger.LogInformation("Frontend URL for redirects: {FrontendUrl}", frontendUrlForEndpoints);
+    
     if (!hasGoogleAuth)
     {
+        app.Logger.LogWarning("Google authentication not configured");
         return Results.BadRequest(new { error = "Google authentication not configured" });
     }
+    
+    app.Logger.LogInformation("Initiating Google OAuth challenge with callback: /api/auth/callback");
     return Results.Challenge(new AuthenticationProperties 
     { 
         RedirectUri = "/api/auth/callback" 
@@ -124,6 +157,11 @@ app.MapGet("/api/auth/login", () =>
 
 app.MapGet("/api/auth/callback", (HttpContext context) =>
 {
+    app.Logger.LogInformation("=== OAuth Callback Received ===");
+    app.Logger.LogInformation("Request URL: {RequestUrl}", context.Request.GetDisplayUrl());
+    app.Logger.LogInformation("User Authenticated: {IsAuthenticated}", context.User.Identity?.IsAuthenticated);
+    app.Logger.LogInformation("Frontend URL for redirect: {FrontendUrl}", frontendUrlForEndpoints);
+    
     if (context.User.Identity?.IsAuthenticated == true)
     {
         var user = new
@@ -132,18 +170,31 @@ app.MapGet("/api/auth/callback", (HttpContext context) =>
             Email = context.User.FindFirst(ClaimTypes.Email)?.Value,
             Picture = context.User.FindFirst("picture")?.Value
         };
+        
+        app.Logger.LogInformation("User details - Name: {Name}, Email: {Email}", user.Name, user.Email);
+        
         try
         {
             var userJson = JsonSerializer.Serialize(user);
-            return Results.Redirect($"{frontendUrlForEndpoints}/dashboard?user={Uri.EscapeDataString(userJson)}");
+            var redirectUrl = $"{frontendUrlForEndpoints}/dashboard?user={Uri.EscapeDataString(userJson)}";
+            app.Logger.LogInformation("Redirecting to: {RedirectUrl}", redirectUrl);
+            app.Logger.LogInformation("=================================");
+            return Results.Redirect(redirectUrl);
         }
         catch (Exception ex)
         {
             app.Logger.LogError(ex, "Failed to serialize user data for redirect");
-            return Results.Redirect($"{frontendUrlForEndpoints}/dashboard");
+            var fallbackUrl = $"{frontendUrlForEndpoints}/dashboard";
+            app.Logger.LogInformation("Fallback redirect to: {FallbackUrl}", fallbackUrl);
+            app.Logger.LogInformation("=================================");
+            return Results.Redirect(fallbackUrl);
         }
     }
-    return Results.Redirect($"{frontendUrlForEndpoints}/login?error=authentication_failed");
+    
+    var errorUrl = $"{frontendUrlForEndpoints}/login?error=authentication_failed";
+    app.Logger.LogWarning("Authentication failed, redirecting to: {ErrorUrl}", errorUrl);
+    app.Logger.LogInformation("=================================");
+    return Results.Redirect(errorUrl);
 });
 
 app.MapGet("/api/auth/user", (HttpContext context) =>
@@ -162,6 +213,9 @@ app.MapGet("/api/auth/user", (HttpContext context) =>
 
 app.MapPost("/api/auth/logout", (HttpContext context) =>
 {
+    app.Logger.LogInformation("=== OAuth Logout Initiated ===");
+    app.Logger.LogInformation("Logout redirect URL: {LogoutUrl}", frontendUrlForEndpoints);
+    app.Logger.LogInformation("=================================");
     return Results.SignOut(new AuthenticationProperties
     {
         RedirectUri = frontendUrlForEndpoints
