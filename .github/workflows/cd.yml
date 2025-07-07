@@ -46,6 +46,14 @@ jobs:
         echo "tag=sha-$SHORT_SHA" >> $GITHUB_OUTPUT
         echo "image=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:sha-$SHORT_SHA" >> $GITHUB_OUTPUT
 
+    - name: Get container FQDN for environment variables
+      id: container_url
+      run: |
+        # Generate expected FQDN for the container instance
+        CONTAINER_FQDN="${{ env.ACI_NAME }}.southcentralus.azurecontainer.io"
+        echo "fqdn=$CONTAINER_FQDN" >> $GITHUB_OUTPUT
+        echo "frontend_url=http://$CONTAINER_FQDN" >> $GITHUB_OUTPUT
+
     - name: Deploy to Azure Container Instance
       uses: azure/aci-deploy@v1
       with:
@@ -63,6 +71,9 @@ jobs:
         environment-variables: |
           ASPNETCORE_ENVIRONMENT=Production
           ASPNETCORE_URLS=http://+:8080
+          Authentication__Google__ClientId=${{ secrets.GOOGLE_CLIENTID }}
+          Authentication__Google__ClientSecret=${{ secrets.GOOGLE_CLIENTSECRET }}
+          Frontend__BaseUrl=${{ steps.container_url.outputs.frontend_url }}
 
     - name: Verify deployment
       run: |

@@ -11,6 +11,16 @@ var googleClientId = builder.Configuration["Authentication:Google:ClientId"];
 var googleClientSecret = builder.Configuration["Authentication:Google:ClientSecret"];
 var hasGoogleAuth = !string.IsNullOrEmpty(googleClientId) && !string.IsNullOrEmpty(googleClientSecret);
 
+// Validate Google OAuth configuration in production
+if (!builder.Environment.IsDevelopment() && !hasGoogleAuth)
+{
+    var logger = LoggerFactory.Create(config => config.AddConsole()).CreateLogger("Startup");
+    logger.LogError("Google OAuth configuration is required in production environment");
+    logger.LogError("Missing Authentication:Google:ClientId or Authentication:Google:ClientSecret");
+    logger.LogError("Please ensure GOOGLE_CLIENTID and GOOGLE_CLIENTSECRET secrets are configured in the deployment pipeline");
+    throw new InvalidOperationException("Google OAuth configuration is required in production. Please configure Authentication:Google:ClientId and Authentication:Google:ClientSecret.");
+}
+
 var authBuilder = builder.Services.AddAuthentication(options =>
 {
     options.DefaultScheme = "Cookies";
