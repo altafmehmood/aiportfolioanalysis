@@ -1,0 +1,190 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "containerGroupName": {
+      "type": "string",
+      "defaultValue": "aiportfolioanalysis-https",
+      "metadata": {
+        "description": "Name of the container group"
+      }
+    },
+    "location": {
+      "type": "string",
+      "defaultValue": "South Central US",
+      "metadata": {
+        "description": "Location for the container group"
+      }
+    },
+    "googleClientId": {
+      "type": "securestring",
+      "metadata": {
+        "description": "Google OAuth Client ID"
+      }
+    },
+    "googleClientSecret": {
+      "type": "securestring",
+      "metadata": {
+        "description": "Google OAuth Client Secret"
+      }
+    },
+    "storageAccountName": {
+      "type": "string",
+      "metadata": {
+        "description": "Azure Storage Account name for SSL certificates"
+      }
+    },
+    "storageAccountKey": {
+      "type": "securestring",
+      "metadata": {
+        "description": "Azure Storage Account key"
+      }
+    },
+    "dnsNameLabel": {
+      "type": "string",
+      "defaultValue": "aiportfolioanalysis",
+      "metadata": {
+        "description": "DNS name label for the container group"
+      }
+    }
+  },
+  "variables": {
+    "containerGroupLocation": "[parameters('location')]",
+    "frontendBaseUrl": "[concat('https://', parameters('dnsNameLabel'), '.southcentralus.azurecontainer.io')]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.ContainerInstance/containerGroups",
+      "apiVersion": "2023-05-01",
+      "name": "[parameters('containerGroupName')]",
+      "location": "[variables('containerGroupLocation')]",
+      "properties": {
+        "containers": [
+          {
+            "name": "nginx-proxy",
+            "properties": {
+              "image": "aiportfolioanalysis-nginx:latest",
+              "ports": [
+                {
+                  "protocol": "TCP",
+                  "port": 80
+                },
+                {
+                  "protocol": "TCP",
+                  "port": 443
+                }
+              ],
+              "environmentVariables": [],
+              "resources": {
+                "requests": {
+                  "memoryInGB": 0.5,
+                  "cpu": 0.25
+                }
+              },
+              "volumeMounts": [
+                {
+                  "name": "ssl-certs",
+                  "mountPath": "/etc/ssl/certs",
+                  "readOnly": false
+                },
+                {
+                  "name": "ssl-private",
+                  "mountPath": "/etc/ssl/private",
+                  "readOnly": false
+                }
+              ]
+            }
+          },
+          {
+            "name": "aiportfolioanalysis-app",
+            "properties": {
+              "image": "aiportfolioanalysis:latest",
+              "ports": [
+                {
+                  "protocol": "TCP",
+                  "port": 8080
+                }
+              ],
+              "environmentVariables": [
+                {
+                  "name": "ASPNETCORE_ENVIRONMENT",
+                  "value": "Production"
+                },
+                {
+                  "name": "ASPNETCORE_URLS",
+                  "value": "http://+:8080"
+                },
+                {
+                  "name": "GOOGLE_CLIENTID",
+                  "secureValue": "[parameters('googleClientId')]"
+                },
+                {
+                  "name": "GOOGLE_CLIENTSECRET",
+                  "secureValue": "[parameters('googleClientSecret')]"
+                },
+                {
+                  "name": "Frontend__BaseUrl",
+                  "value": "[variables('frontendBaseUrl')]"
+                },
+                {
+                  "name": "ASPNETCORE_FORWARDEDHEADERS_ENABLED",
+                  "value": "true"
+                }
+              ],
+              "resources": {
+                "requests": {
+                  "memoryInGB": 2.0,
+                  "cpu": 1.0
+                }
+              }
+            }
+          }
+        ],
+        "volumes": [
+          {
+            "name": "ssl-certs",
+            "azureFile": {
+              "shareName": "ssl-certs",
+              "storageAccountName": "[parameters('storageAccountName')]",
+              "storageAccountKey": "[parameters('storageAccountKey')]"
+            }
+          },
+          {
+            "name": "ssl-private",
+            "azureFile": {
+              "shareName": "ssl-private",
+              "storageAccountName": "[parameters('storageAccountName')]",
+              "storageAccountKey": "[parameters('storageAccountKey')]"
+            }
+          }
+        ],
+        "ipAddress": {
+          "type": "Public",
+          "ports": [
+            {
+              "protocol": "TCP",
+              "port": 80
+            },
+            {
+              "protocol": "TCP",
+              "port": 443
+            }
+          ],
+          "dnsNameLabel": "[parameters('dnsNameLabel')]"
+        },
+        "osType": "Linux",
+        "restartPolicy": "Always"
+      }
+    }
+  ],
+  "outputs": {
+    "containerIPv4Address": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.ContainerInstance/containerGroups', parameters('containerGroupName'))).ipAddress.ip]"
+    },
+    "containerFQDN": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.ContainerInstance/containerGroups', parameters('containerGroupName'))).ipAddress.fqdn]"
+    }
+  }
+}
