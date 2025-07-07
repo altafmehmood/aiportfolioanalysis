@@ -159,8 +159,20 @@ app.MapGet("/api/auth/callback", (HttpContext context) =>
 {
     app.Logger.LogInformation("=== OAuth Callback Received ===");
     app.Logger.LogInformation("Request URL: {RequestUrl}", context.Request.GetDisplayUrl());
+    app.Logger.LogInformation("Request Host: {Host}", context.Request.Host);
+    app.Logger.LogInformation("Request Scheme: {Scheme}", context.Request.Scheme);
+    app.Logger.LogInformation("Request Headers:");
+    foreach (var header in context.Request.Headers)
+    {
+        app.Logger.LogInformation("  {Key}: {Value}", header.Key, header.Value);
+    }
     app.Logger.LogInformation("User Authenticated: {IsAuthenticated}", context.User.Identity?.IsAuthenticated);
     app.Logger.LogInformation("Frontend URL for redirect: {FrontendUrl}", frontendUrlForEndpoints);
+    app.Logger.LogInformation("All OAuth Claims:");
+    foreach (var claim in context.User.Claims)
+    {
+        app.Logger.LogInformation("  {Type}: {Value}", claim.Type, claim.Value);
+    }
     
     if (context.User.Identity?.IsAuthenticated == true)
     {
@@ -220,6 +232,28 @@ app.MapPost("/api/auth/logout", (HttpContext context) =>
     {
         RedirectUri = frontendUrlForEndpoints
     }, new[] { "Cookies" });
+});
+
+// Debug endpoint to check runtime configuration
+app.MapGet("/api/debug/config", (IConfiguration configuration) =>
+{
+    var debug = new
+    {
+        Environment = app.Environment.EnvironmentName,
+        FrontendUrlFromCode = frontendUrlForEndpoints,
+        FrontendUrlFromConfig = configuration["Frontend:BaseUrl"],
+        AllFrontendConfig = configuration.AsEnumerable()
+            .Where(c => c.Key?.StartsWith("Frontend") == true)
+            .ToDictionary(c => c.Key, c => c.Value),
+        EnvironmentVariables = Environment.GetEnvironmentVariables()
+            .Cast<DictionaryEntry>()
+            .Where(e => e.Key.ToString()?.Contains("Frontend", StringComparison.OrdinalIgnoreCase) == true)
+            .ToDictionary(e => e.Key.ToString(), e => e.Value?.ToString()),
+        ServerUrls = app.Urls.ToArray(),
+        RequestHost = "Will be set on actual request"
+    };
+    
+    return Results.Ok(debug);
 });
 
 app.MapGet("/weatherforecast", () =>
