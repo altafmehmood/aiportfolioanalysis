@@ -79,7 +79,7 @@ jobs:
     - name: Verify deployment
       run: |
         echo "Waiting for container to start..."
-        sleep 30
+        sleep 60
         
         # Get the FQDN of the container instance with error handling
         FQDN=$(az container show \
@@ -96,27 +96,41 @@ jobs:
         echo "Container FQDN: $FQDN"
         
         # Health check with retry logic
-        MAX_RETRIES=5
+        MAX_RETRIES=8
         RETRY_COUNT=0
         HTTP_STATUS="000"
         
         while [ $RETRY_COUNT -lt $MAX_RETRIES ] && [ "$HTTP_STATUS" != "200" ]; do
           echo "Health check attempt $((RETRY_COUNT + 1))/$MAX_RETRIES..."
-          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 http://$FQDN || echo "000")
+          
+          # Try dedicated health endpoint first
+          echo "Checking health endpoint: http://$FQDN:8080/health"
+          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 http://$FQDN:8080/health || echo "000")
+          
+          if [ "$HTTP_STATUS" != "200" ]; then
+            echo "Health endpoint failed with status $HTTP_STATUS, trying root endpoint..."
+            HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 http://$FQDN:8080 || echo "000")
+          fi
           
           if [ "$HTTP_STATUS" = "200" ]; then
             echo "✅ Deployment successful - Application is responding"
-            echo "🌐 Application URL: http://$FQDN"
+            echo "🌐 Application URL: http://$FQDN:8080"
             break
           else
-            echo "⏳ HTTP Status: $HTTP_STATUS, retrying in 15 seconds..."
-            sleep 15
+            echo "⏳ HTTP Status: $HTTP_STATUS, retrying in 20 seconds..."
+            echo "📋 Container logs (last 10 lines):"
+            az container logs --resource-group ${{ env.ACI_RESOURCE_GROUP }} --name ${{ env.ACI_NAME }} --tail 10 || echo "Could not retrieve container logs"
+            sleep 20
             RETRY_COUNT=$((RETRY_COUNT + 1))
           fi
         done
         
         if [ "$HTTP_STATUS" != "200" ]; then
           echo "❌ Deployment failed after $MAX_RETRIES attempts - Final HTTP Status: $HTTP_STATUS"
+          echo "📋 Final container logs:"
+          az container logs --resource-group ${{ env.ACI_RESOURCE_GROUP }} --name ${{ env.ACI_NAME }} --tail 50 || echo "Could not retrieve container logs"
+          echo "🔍 Container details:"
+          az container show --resource-group ${{ env.ACI_RESOURCE_GROUP }} --name ${{ env.ACI_NAME }} --query "{state: instanceView.state, restartCount: instanceView.restartCount, events: instanceView.events}" || echo "Could not retrieve container details"
           exit 1
         fi
 
@@ -131,5 +145,5 @@ jobs:
         echo "## 🚀 Deployment Summary" >> $GITHUB_STEP_SUMMARY
         echo "- **Environment**: Production" >> $GITHUB_STEP_SUMMARY
         echo "- **Image**: ${{ steps.image.outputs.image }}" >> $GITHUB_STEP_SUMMARY
-        echo "- **URL**: http://$FQDN" >> $GITHUB_STEP_SUMMARY
+        echo "- **URL**: http://$FQDN:8080" >> $GITHUB_STEP_SUMMARY
         echo "- **Status**: ✅ Successfully deployed" >> $GITHUB_STEP_SUMMARY
