@@ -1,4 +1,4 @@
 export const environment = {
   production: true,
-  apiUrl: 'http://aiportfolioanalysis.southcentralus.azurecontainer.io'
+  apiUrl: 'http://aiportfolioanalysis.southcentralus.azurecontainer.io:8080'
 };
