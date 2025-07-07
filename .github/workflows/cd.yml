@@ -53,7 +53,7 @@ jobs:
         REGION=$(echo "South Central US" | tr '[:upper:]' '[:lower:]' | sed 's/ //g')
         CONTAINER_FQDN="${{ env.ACI_NAME }}.${REGION}.azurecontainer.io"
         echo "fqdn=$CONTAINER_FQDN" >> $GITHUB_OUTPUT
-        echo "frontend_url=http://$CONTAINER_FQDN" >> $GITHUB_OUTPUT
+        echo "frontend_url=http://$CONTAINER_FQDN:8080" >> $GITHUB_OUTPUT
 
     - name: Deploy to Azure Container Instance
       uses: azure/aci-deploy@v1
