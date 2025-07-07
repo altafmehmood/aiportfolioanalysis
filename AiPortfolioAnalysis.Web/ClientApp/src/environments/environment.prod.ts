@@ -1,4 +1,4 @@
 export const environment = {
   production: true,
-  apiUrl: ''  // Will be set by deployment process
+  apiUrl: 'http://aiportfolioanalysis.southcentralus.azurecontainer.io:8080'
 };
