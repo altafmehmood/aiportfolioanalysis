@@ -172,25 +172,8 @@ export class DashboardComponent implements OnInit {
   ) {}
 
   ngOnInit(): void {
-    // Check for user data in query params (from OAuth callback)
-    this.route.queryParams.subscribe(params => {
-      if (params['user']) {
-        try {
-          const userData = JSON.parse(decodeURIComponent(params['user']));
-          this.authService.setUser(userData);
-          this.user = userData;
-          // Remove query params from URL
-          this.router.navigate([], { queryParams: {} });
-          // Load weather data after successful login
-          this.loadWeatherForecast();
-        } catch (e) {
-          console.error('Error parsing user data from URL');
-          this.checkAuthAndRedirect();
-        }
-      } else {
-        this.checkAuthAndRedirect();
-      }
-    });
+    // Initialize authentication using secure API endpoint
+    this.checkAuthAndRedirect();
 
     // Subscribe to auth service for user updates
     this.authService.user$.subscribe(user => {
@@ -219,7 +202,7 @@ export class DashboardComponent implements OnInit {
         this.weatherForecast = data;
       },
       error: (error) => {
-        console.error('Error loading weather forecast:', error);
+        // Weather forecast loading failed
       }
     });
   }
@@ -230,7 +213,6 @@ export class DashboardComponent implements OnInit {
         this.router.navigate(['/login']);
       },
       error: (error) => {
-        console.error('Logout error:', error);
         // Force logout even if API call fails
         this.router.navigate(['/login']);
       }

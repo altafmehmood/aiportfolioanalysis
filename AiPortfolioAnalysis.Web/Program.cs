@@ -13,25 +13,21 @@ builder.Services.AddOpenApi();
 // Add Authentication
 var googleClientId = builder.Configuration["Authentication:Google:ClientId"];
 var googleClientSecret = builder.Configuration["Authentication:Google:ClientSecret"];
-var hasGoogleAuth = !string.IsNullOrEmpty(googleClientId) && !string.IsNullOrEmpty(googleClientSecret);
 
-// Validate Google OAuth configuration in production
-if (!builder.Environment.IsDevelopment() && !hasGoogleAuth)
+// Validate Google OAuth configuration is always required
+if (string.IsNullOrEmpty(googleClientId) || string.IsNullOrEmpty(googleClientSecret))
 {
     var logger = LoggerFactory.Create(config => config.AddConsole()).CreateLogger("Startup");
-    logger.LogError("Google OAuth configuration is required in production environment");
+    logger.LogError("Google OAuth configuration is required");
     logger.LogError("Missing Authentication:Google:ClientId or Authentication:Google:ClientSecret");
-    logger.LogError("Please ensure GOOGLE_CLIENTID and GOOGLE_CLIENTSECRET secrets are configured in the deployment pipeline");
-    throw new InvalidOperationException("Google OAuth configuration is required in production. Please configure Authentication:Google:ClientId and Authentication:Google:ClientSecret.");
+    logger.LogError("Please ensure GOOGLE_CLIENTID and GOOGLE_CLIENTSECRET are configured");
+    throw new InvalidOperationException("Google OAuth configuration is required. Please configure Authentication:Google:ClientId and Authentication:Google:ClientSecret.");
 }
 
-var authBuilder = builder.Services.AddAuthentication(options =>
+builder.Services.AddAuthentication(options =>
 {
     options.DefaultScheme = "Cookies";
-    if (hasGoogleAuth)
-    {
-        options.DefaultChallengeScheme = "Google";
-    }
+    options.DefaultChallengeScheme = "Google";
 })
 .AddCookie("Cookies", options =>
 {
@@ -40,51 +36,26 @@ var authBuilder = builder.Services.AddAuthentication(options =>
     options.Cookie.HttpOnly = true; // Secure cookies - use separate tokens for SPA if needed
     options.ExpireTimeSpan = TimeSpan.FromDays(30);
     options.SlidingExpiration = true;
-});
-
-if (hasGoogleAuth)
+})
+.AddGoogle("Google", options =>
 {
-    authBuilder.AddGoogle("Google", options =>
-    {
-        options.ClientId = googleClientId!;
-        options.ClientSecret = googleClientSecret!;
-        options.CallbackPath = "/signin-google";
-        options.CorrelationCookie.SameSite = SameSiteMode.Lax;
-        options.CorrelationCookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
-    });
-}
+    options.ClientId = googleClientId!;
+    options.ClientSecret = googleClientSecret!;
+    options.CallbackPath = "/signin-google";
+    options.CorrelationCookie.SameSite = SameSiteMode.Lax;
+    options.CorrelationCookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
+});
 
 builder.Services.AddAuthorization();
 
-// Get frontend URL configuration with validation and logging
-// Use environment-aware fallback
+// Get frontend URL configuration
 var defaultFrontendUrl = builder.Environment.IsDevelopment() ? "http://localhost:4200" : "http://example.com";
 var frontendUrl = builder.Configuration["Frontend:BaseUrl"] ?? defaultFrontendUrl;
-var configLogger = LoggerFactory.Create(config => config.AddConsole()).CreateLogger("Configuration");
-configLogger.LogInformation("=== Frontend URL Configuration ====");
-configLogger.LogInformation("Environment: {Environment}", builder.Environment.EnvironmentName);
-configLogger.LogInformation("Frontend:BaseUrl from config: {FrontendUrl}", frontendUrl);
-configLogger.LogInformation("All Frontend configuration values:");
-foreach (var config in builder.Configuration.AsEnumerable().Where(c => c.Key.StartsWith("Frontend")))
-{
-    configLogger.LogInformation("  {Key} = {Value}", config.Key, config.Value);
-}
-configLogger.LogInformation("Environment variables related to Frontend:");
-foreach (DictionaryEntry envVar in Environment.GetEnvironmentVariables())
-{
-    var key = envVar.Key.ToString();
-    if (key?.Contains("Frontend", StringComparison.OrdinalIgnoreCase) == true)
-    {
-        configLogger.LogInformation("  ENV {Key} = {Value}", key, envVar.Value);
-    }
-}
+
 if (!Uri.TryCreate(frontendUrl, UriKind.Absolute, out var frontendUri))
 {
-    configLogger.LogError("Invalid Frontend:BaseUrl configuration: '{FrontendUrl}'. Must be a valid absolute URL.", frontendUrl);
     throw new InvalidOperationException($"Invalid Frontend:BaseUrl configuration: '{frontendUrl}'. Must be a valid absolute URL.");
 }
-configLogger.LogInformation("Final frontend URL: {FrontendUrl}", frontendUrl);
-configLogger.LogInformation("======================================");
 builder.Services.AddCors(options =>
 {
     options.AddDefaultPolicy(corsBuilder =>
@@ -137,18 +108,6 @@ var summaries = new[]
 // Authentication endpoints
 app.MapGet("/api/auth/login", (HttpContext context) => 
 {
-    app.Logger.LogInformation("=== OAuth Login Initiated ===");
-    app.Logger.LogInformation("Request URL: {RequestUrl}", context.Request.GetDisplayUrl());
-    app.Logger.LogInformation("Has Google Auth: {HasGoogleAuth}", hasGoogleAuth);
-    app.Logger.LogInformation("Frontend URL for redirects: {FrontendUrl}", frontendUrlForEndpoints);
-    
-    if (!hasGoogleAuth)
-    {
-        app.Logger.LogWarning("Google authentication not configured");
-        return Results.BadRequest(new { error = "Google authentication not configured" });
-    }
-    
-    app.Logger.LogInformation("Initiating Google OAuth challenge with callback: /api/auth/callback");
     return Results.Challenge(new AuthenticationProperties 
     { 
         RedirectUri = "/api/auth/callback" 
@@ -157,56 +116,14 @@ app.MapGet("/api/auth/login", (HttpContext context) =>
 
 app.MapGet("/api/auth/callback", (HttpContext context) =>
 {
-    app.Logger.LogInformation("=== OAuth Callback Received ===");
-    app.Logger.LogInformation("Request URL: {RequestUrl}", context.Request.GetDisplayUrl());
-    app.Logger.LogInformation("Request Host: {Host}", context.Request.Host);
-    app.Logger.LogInformation("Request Scheme: {Scheme}", context.Request.Scheme);
-    app.Logger.LogInformation("Request Headers:");
-    foreach (var header in context.Request.Headers)
-    {
-        app.Logger.LogInformation("  {Key}: {Value}", header.Key, header.Value);
-    }
-    app.Logger.LogInformation("User Authenticated: {IsAuthenticated}", context.User.Identity?.IsAuthenticated);
-    app.Logger.LogInformation("Frontend URL for redirect: {FrontendUrl}", frontendUrlForEndpoints);
-    app.Logger.LogInformation("All OAuth Claims:");
-    foreach (var claim in context.User.Claims)
-    {
-        app.Logger.LogInformation("  {Type}: {Value}", claim.Type, claim.Value);
-    }
-    
     if (context.User.Identity?.IsAuthenticated == true)
     {
-        var user = new
-        {
-            Name = context.User.Identity.Name,
-            Email = context.User.FindFirst(ClaimTypes.Email)?.Value,
-            Picture = context.User.FindFirst("picture")?.Value
-        };
-        
-        app.Logger.LogInformation("User details - Name: {Name}, Email: {Email}", user.Name, user.Email);
-        
-        try
-        {
-            var userJson = JsonSerializer.Serialize(user);
-            var redirectUrl = $"{frontendUrlForEndpoints}/dashboard?user={Uri.EscapeDataString(userJson)}";
-            app.Logger.LogInformation("Redirecting to: {RedirectUrl}", redirectUrl);
-            app.Logger.LogInformation("=================================");
-            return Results.Redirect(redirectUrl);
-        }
-        catch (Exception ex)
-        {
-            app.Logger.LogError(ex, "Failed to serialize user data for redirect");
-            var fallbackUrl = $"{frontendUrlForEndpoints}/dashboard";
-            app.Logger.LogInformation("Fallback redirect to: {FallbackUrl}", fallbackUrl);
-            app.Logger.LogInformation("=================================");
-            return Results.Redirect(fallbackUrl);
-        }
+        // User is authenticated, session is established
+        // Redirect to dashboard without exposing user data in URL
+        return Results.Redirect($"{frontendUrlForEndpoints}/dashboard");
     }
     
-    var errorUrl = $"{frontendUrlForEndpoints}/login?error=authentication_failed";
-    app.Logger.LogWarning("Authentication failed, redirecting to: {ErrorUrl}", errorUrl);
-    app.Logger.LogInformation("=================================");
-    return Results.Redirect(errorUrl);
+    return Results.Redirect($"{frontendUrlForEndpoints}/login?error=authentication_failed");
 });
 
 app.MapGet("/api/auth/user", (HttpContext context) =>
@@ -225,35 +142,10 @@ app.MapGet("/api/auth/user", (HttpContext context) =>
 
 app.MapPost("/api/auth/logout", (HttpContext context) =>
 {
-    app.Logger.LogInformation("=== OAuth Logout Initiated ===");
-    app.Logger.LogInformation("Logout redirect URL: {LogoutUrl}", frontendUrlForEndpoints);
-    app.Logger.LogInformation("=================================");
     return Results.SignOut(new AuthenticationProperties
     {
         RedirectUri = frontendUrlForEndpoints
     }, new[] { "Cookies" });
-});
-
-// Debug endpoint to check runtime configuration
-app.MapGet("/api/debug/config", (IConfiguration configuration) =>
-{
-    var debug = new
-    {
-        Environment = app.Environment.EnvironmentName,
-        FrontendUrlFromCode = frontendUrlForEndpoints,
-        FrontendUrlFromConfig = configuration["Frontend:BaseUrl"],
-        AllFrontendConfig = configuration.AsEnumerable()
-            .Where(c => c.Key?.StartsWith("Frontend") == true)
-            .ToDictionary(c => c.Key, c => c.Value),
-        EnvironmentVariables = Environment.GetEnvironmentVariables()
-            .Cast<DictionaryEntry>()
-            .Where(e => e.Key.ToString()?.Contains("Frontend", StringComparison.OrdinalIgnoreCase) == true)
-            .ToDictionary(e => e.Key.ToString(), e => e.Value?.ToString()),
-        ServerUrls = app.Urls.ToArray(),
-        RequestHost = "Will be set on actual request"
-    };
-    
-    return Results.Ok(debug);
 });
 
 app.MapGet("/weatherforecast", () =>
