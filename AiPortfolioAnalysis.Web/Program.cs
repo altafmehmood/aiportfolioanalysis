@@ -47,6 +47,7 @@ builder.Services.AddAuthentication(options =>
 });
 
 builder.Services.AddAuthorization();
+builder.Services.AddHealthChecks();
 
 // Get frontend URL configuration
 var defaultFrontendUrl = builder.Environment.IsDevelopment() ? "http://localhost:4200" : "http://example.com";
@@ -147,6 +148,10 @@ app.MapPost("/api/auth/logout", (HttpContext context) =>
         RedirectUri = frontendUrlForEndpoints
     }, new[] { "Cookies" });
 });
+
+
+// Health check endpoint
+app.MapHealthChecks("/health");
 
 app.MapGet("/weatherforecast", () =>
 {
