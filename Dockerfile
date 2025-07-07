@@ -2,7 +2,7 @@
 FROM node:22-alpine AS frontend-build
 WORKDIR /app/clientapp
 COPY AiPortfolioAnalysis.Web/ClientApp/package*.json ./
-RUN npm ci
+RUN npm cache clean --force && npm ci
 COPY AiPortfolioAnalysis.Web/ClientApp/ ./
 RUN npm run build -- --configuration production
 
