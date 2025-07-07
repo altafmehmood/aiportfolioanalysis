@@ -148,7 +148,6 @@ app.MapPost("/api/auth/logout", (HttpContext context) =>
     }, new[] { "Cookies" });
 });
 
-
 app.MapGet("/weatherforecast", () =>
 {
     var forecast =  Enumerable.Range(1, 5).Select(index =>
