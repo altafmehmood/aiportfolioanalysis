@@ -184,7 +184,6 @@ export class DashboardComponent implements OnInit {
           // Load weather data after successful login
           this.loadWeatherForecast();
         } catch (e) {
-          console.error('Error parsing user data from URL');
           this.checkAuthAndRedirect();
         }
       } else {
@@ -219,7 +218,7 @@ export class DashboardComponent implements OnInit {
         this.weatherForecast = data;
       },
       error: (error) => {
-        console.error('Error loading weather forecast:', error);
+        // Weather forecast loading failed
       }
     });
   }
@@ -230,7 +229,6 @@ export class DashboardComponent implements OnInit {
         this.router.navigate(['/login']);
       },
       error: (error) => {
-        console.error('Logout error:', error);
         // Force logout even if API call fails
         this.router.navigate(['/login']);
       }
