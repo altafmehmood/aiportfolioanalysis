@@ -102,11 +102,11 @@ jobs:
         
         while [ $RETRY_COUNT -lt $MAX_RETRIES ] && [ "$HTTP_STATUS" != "200" ]; do
           echo "Health check attempt $((RETRY_COUNT + 1))/$MAX_RETRIES..."
-          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 http://$FQDN || echo "000")
+          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 https://$FQDN || echo "000")
           
           if [ "$HTTP_STATUS" = "200" ]; then
             echo "✅ Deployment successful - Application is responding"
-            echo "🌐 Application URL: http://$FQDN"
+            echo "🌐 Application URL: https://$FQDN"
             break
           else
             echo "⏳ HTTP Status: $HTTP_STATUS, retrying in 15 seconds..."
@@ -131,5 +131,5 @@ jobs:
         echo "## 🚀 Deployment Summary" >> $GITHUB_STEP_SUMMARY
         echo "- **Environment**: Production" >> $GITHUB_STEP_SUMMARY
         echo "- **Image**: ${{ steps.image.outputs.image }}" >> $GITHUB_STEP_SUMMARY
-        echo "- **URL**: http://$FQDN" >> $GITHUB_STEP_SUMMARY
+        echo "- **URL**: https://$FQDN" >> $GITHUB_STEP_SUMMARY
         echo "- **Status**: ✅ Successfully deployed" >> $GITHUB_STEP_SUMMARY
