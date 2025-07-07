@@ -36,9 +36,7 @@ var authBuilder = builder.Services.AddAuthentication(options =>
 .AddCookie("Cookies", options =>
 {
     options.Cookie.SameSite = SameSiteMode.Lax;
-    options.Cookie.SecurePolicy = builder.Environment.IsDevelopment() 
-        ? CookieSecurePolicy.SameAsRequest 
-        : CookieSecurePolicy.Always;
+    options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
     options.Cookie.HttpOnly = true; // Secure cookies - use separate tokens for SPA if needed
     options.ExpireTimeSpan = TimeSpan.FromDays(30);
     options.SlidingExpiration = true;
@@ -51,6 +49,8 @@ if (hasGoogleAuth)
         options.ClientId = googleClientId!;
         options.ClientSecret = googleClientSecret!;
         options.CallbackPath = "/signin-google";
+        options.CorrelationCookie.SameSite = SameSiteMode.Lax;
+        options.CorrelationCookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
     });
 }
 
