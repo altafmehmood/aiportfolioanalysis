@@ -42,7 +42,7 @@ builder.Services.AddAuthentication(options =>
 .AddCookie("Cookies", options =>
 {
     options.Cookie.SameSite = SameSiteMode.Lax;
-    options.Cookie.SecurePolicy = builder.Environment.IsDevelopment() ? CookieSecurePolicy.SameAsRequest : CookieSecurePolicy.Always;
+    options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
     options.Cookie.HttpOnly = true; // Secure cookies - use separate tokens for SPA if needed
     options.ExpireTimeSpan = TimeSpan.FromDays(30);
     options.SlidingExpiration = true;
@@ -163,8 +163,6 @@ app.MapPost("/api/auth/logout", (HttpContext context) =>
 
 // Health check endpoint
 app.MapHealthChecks("/health");
-
-// Note: ACME challenge endpoint no longer needed - Caddy handles this automatically
 
 app.MapGet("/weatherforecast", () =>
 {
