@@ -164,6 +164,8 @@ app.MapPost("/api/auth/logout", (HttpContext context) =>
 // Health check endpoint
 app.MapHealthChecks("/health");
 
+// Note: ACME challenge endpoint no longer needed - Caddy handles this automatically
+
 app.MapGet("/weatherforecast", () =>
 {
     var forecast =  Enumerable.Range(1, 5).Select(index =>

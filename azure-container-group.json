@@ -61,9 +61,9 @@
       "properties": {
         "containers": [
           {
-            "name": "nginx-proxy",
+            "name": "caddy-proxy",
             "properties": {
-              "image": "aiportfolioanalysis-nginx:latest",
+              "image": "aiportfolioanalysis-caddy:latest",
               "ports": [
                 {
                   "protocol": "TCP",
@@ -72,6 +72,10 @@
                 {
                   "protocol": "TCP",
                   "port": 443
+                },
+                {
+                  "protocol": "TCP",
+                  "port": 2019
                 }
               ],
               "environmentVariables": [],
@@ -83,13 +87,13 @@
               },
               "volumeMounts": [
                 {
-                  "name": "ssl-certs",
-                  "mountPath": "/etc/ssl/certs",
+                  "name": "caddy-data",
+                  "mountPath": "/data",
                   "readOnly": false
                 },
                 {
-                  "name": "ssl-private",
-                  "mountPath": "/etc/ssl/private",
+                  "name": "caddy-config",
+                  "mountPath": "/config",
                   "readOnly": false
                 }
               ]
@@ -142,17 +146,17 @@
         ],
         "volumes": [
           {
-            "name": "ssl-certs",
+            "name": "caddy-data",
             "azureFile": {
-              "shareName": "ssl-certs",
+              "shareName": "caddy-data",
               "storageAccountName": "[parameters('storageAccountName')]",
               "storageAccountKey": "[parameters('storageAccountKey')]"
             }
           },
           {
-            "name": "ssl-private",
+            "name": "caddy-config",
             "azureFile": {
-              "shareName": "ssl-private",
+              "shareName": "caddy-config",
               "storageAccountName": "[parameters('storageAccountName')]",
               "storageAccountKey": "[parameters('storageAccountKey')]"
             }
@@ -168,6 +172,10 @@
             {
               "protocol": "TCP",
               "port": 443
+            },
+            {
+              "protocol": "TCP",
+              "port": 2019
             }
           ],
           "dnsNameLabel": "[parameters('dnsNameLabel')]"

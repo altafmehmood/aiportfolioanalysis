@@ -56,16 +56,16 @@ create_storage_account() {
         echo -e "${GREEN}Storage account $STORAGE_ACCOUNT_NAME already exists${NC}"
     fi
 
-    # Create file shares
+    # Create file shares for Caddy data
     STORAGE_KEY=$(az storage account keys list --resource-group $RESOURCE_GROUP --account-name $STORAGE_ACCOUNT_NAME --query '[0].value' -o tsv)
     
     az storage share create \
-        --name ssl-certs \
+        --name caddy-data \
         --account-name $STORAGE_ACCOUNT_NAME \
         --account-key $STORAGE_KEY || true
 
     az storage share create \
-        --name ssl-private \
+        --name caddy-config \
         --account-name $STORAGE_ACCOUNT_NAME \
         --account-key $STORAGE_KEY || true
 }
@@ -96,10 +96,10 @@ build_and_push_images() {
     docker tag aiportfolioanalysis:latest $ACR_NAME.azurecr.io/aiportfolioanalysis:latest
     docker push $ACR_NAME.azurecr.io/aiportfolioanalysis:latest
 
-    # Build NGINX container
-    docker build -f Dockerfile.nginx -t aiportfolioanalysis-nginx:latest .
-    docker tag aiportfolioanalysis-nginx:latest $ACR_NAME.azurecr.io/aiportfolioanalysis-nginx:latest
-    docker push $ACR_NAME.azurecr.io/aiportfolioanalysis-nginx:latest
+    # Build Caddy container
+    docker build -f Dockerfile.caddy -t aiportfolioanalysis-caddy:latest .
+    docker tag aiportfolioanalysis-caddy:latest $ACR_NAME.azurecr.io/aiportfolioanalysis-caddy:latest
+    docker push $ACR_NAME.azurecr.io/aiportfolioanalysis-caddy:latest
 }
 
 # Function to deploy container group
@@ -117,7 +117,7 @@ deploy_container_group() {
 
     # Update ARM template with ACR references
     sed -i.bak "s/aiportfolioanalysis:latest/$ACR_NAME.azurecr.io\/aiportfolioanalysis:latest/g" azure-container-group.json
-    sed -i.bak "s/aiportfolioanalysis-nginx:latest/$ACR_NAME.azurecr.io\/aiportfolioanalysis-nginx:latest/g" azure-container-group.json
+    sed -i.bak "s/aiportfolioanalysis-caddy:latest/$ACR_NAME.azurecr.io\/aiportfolioanalysis-caddy:latest/g" azure-container-group.json
 
     # Deploy container group
     az deployment group create \
@@ -141,10 +141,10 @@ display_deployment_info() {
     echo -e "${GREEN}Deployment completed successfully!${NC}"
     echo -e "${GREEN}Application URL: https://$DNS_NAME_LABEL.southcentralus.azurecontainer.io${NC}"
     echo -e "${YELLOW}Next steps:${NC}"
-    echo "1. Generate and upload SSL certificates (see SSL_CERTIFICATE_SETUP.md)"
+    echo "1. Wait for Caddy to automatically provision SSL certificates (takes 1-2 minutes)"
     echo "2. Update Google OAuth settings with HTTPS redirect URLs"
     echo "3. Test the application and SSL configuration"
-    echo "4. Set up certificate renewal process"
+    echo "4. Enjoy automatic certificate renewal! 🎉"
 }
 
 # Main execution

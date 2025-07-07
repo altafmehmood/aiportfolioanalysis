@@ -1,30 +1,38 @@
-# SSL Certificate Setup for Azure Container Groups
+# Automatic HTTPS Setup with Caddy for Azure Container Groups
 
-This document describes how to set up SSL certificates for the AI Portfolio Analysis application running on Azure Container Groups.
+This document describes how to set up automatic HTTPS using Caddy for the AI Portfolio Analysis application running on Azure Container Groups.
 
 ## Prerequisites
 
 - Azure CLI installed and configured
 - Azure subscription with Container Instance permissions
-- Azure Storage Account for certificate persistence
-- Domain name pointing to your Azure Container Instance
+- Azure Storage Account for Caddy data persistence
+- Domain name pointing to your Azure Container Instance (Azure auto-generated domain works!)
 
-## Certificate Management Options
+## Automatic HTTPS with Caddy
 
-### Option 1: Let's Encrypt Manual Certificate (Recommended)
+### Why Caddy?
 
-1. **Generate Let's Encrypt Certificate Locally**:
-   ```bash
-   # Install certbot locally
-   sudo apt-get update
-   sudo apt-get install certbot
+Caddy automatically provisions and renews Let's Encrypt certificates with **zero configuration**. No manual certificate generation, no renewal scripts, no DNS challenges - it all happens automatically!
 
-   # Generate certificate (replace with your domain)
-   sudo certbot certonly --manual --preferred-challenges dns \
-     -d aiportfolioanalysis.southcentralus.azurecontainer.io
-   ```
+### Key Benefits:
+- ✅ **Automatic certificate provisioning** from Let's Encrypt
+- ✅ **Automatic renewal** (happens in background)
+- ✅ **Works with Azure Container Instances** auto-generated domains
+- ✅ **No manual certificate management** required
+- ✅ **HTTP/2 and modern TLS** by default
+- ✅ **Built-in security headers** and rate limiting
 
-2. **Upload Certificates to Azure File Share**:
+### How It Works:
+
+1. **First Request**: Caddy automatically requests a certificate from Let's Encrypt
+2. **HTTP Challenge**: Caddy handles the ACME challenge automatically
+3. **Certificate Storage**: Certificates are stored in Azure File Share
+4. **Automatic Renewal**: Caddy renews certificates before expiration
+
+## Deployment Steps
+
+### 1. **Create Azure Storage Account for Caddy Data**:
    ```bash
    # Create Azure Storage Account
    az storage account create \
@@ -33,54 +41,33 @@ This document describes how to set up SSL certificates for the AI Portfolio Anal
      --location "South Central US" \
      --sku Standard_LRS
 
-   # Create file shares
+   # Create file shares for Caddy data
    az storage share create \
-     --name ssl-certs \
+     --name caddy-data \
      --account-name aiportfolioanalysiscerts
 
    az storage share create \
-     --name ssl-private \
-     --account-name aiportfolioanalysiscerts
-
-   # Upload certificates
-   az storage file upload \
-     --share-name ssl-certs \
-     --source /etc/letsencrypt/live/your-domain/fullchain.pem \
-     --path aiportfolioanalysis.crt \
-     --account-name aiportfolioanalysiscerts
-
-   az storage file upload \
-     --share-name ssl-private \
-     --source /etc/letsencrypt/live/your-domain/privkey.pem \
-     --path aiportfolioanalysis.key \
+     --name caddy-config \
      --account-name aiportfolioanalysiscerts
    ```
 
-### Option 2: Azure Key Vault Integration (Advanced)
-
-1. **Store certificates in Azure Key Vault**
-2. **Use Azure Container Groups with Key Vault integration**
-3. **Mount certificates as secrets**
-
-## Deployment Steps
-
-1. **Build and Push Container Images**:
+### 2. **Build and Push Container Images**:
    ```bash
    # Build application container
    docker build -t aiportfolioanalysis:latest .
 
-   # Build NGINX container
-   docker build -f Dockerfile.nginx -t aiportfolioanalysis-nginx:latest .
+   # Build Caddy container
+   docker build -f Dockerfile.caddy -t aiportfolioanalysis-caddy:latest .
 
    # Push to Azure Container Registry
    az acr login --name your-registry
    docker tag aiportfolioanalysis:latest your-registry.azurecr.io/aiportfolioanalysis:latest
-   docker tag aiportfolioanalysis-nginx:latest your-registry.azurecr.io/aiportfolioanalysis-nginx:latest
+   docker tag aiportfolioanalysis-caddy:latest your-registry.azurecr.io/aiportfolioanalysis-caddy:latest
    docker push your-registry.azurecr.io/aiportfolioanalysis:latest
-   docker push your-registry.azurecr.io/aiportfolioanalysis-nginx:latest
+   docker push your-registry.azurecr.io/aiportfolioanalysis-caddy:latest
    ```
 
-2. **Deploy Azure Container Group**:
+### 3. **Deploy Azure Container Group**:
    ```bash
    # Update azure-container-group.json with your values
    az deployment group create \
@@ -93,31 +80,32 @@ This document describes how to set up SSL certificates for the AI Portfolio Anal
        storageAccountKey="your-storage-account-key"
    ```
 
-## Certificate Renewal
+### 4. **That's It! 🎉**
 
-Let's Encrypt certificates expire every 90 days. To renew:
+After deployment:
+1. **First HTTPS Request**: Caddy automatically requests a certificate from Let's Encrypt
+2. **Certificate Storage**: Certificate is stored in Azure File Share
+3. **Automatic Renewal**: Caddy handles renewal automatically (no manual intervention needed)
 
-1. **Generate new certificate locally**:
-   ```bash
-   sudo certbot renew --manual --preferred-challenges dns
-   ```
+## Certificate Management
 
-2. **Upload new certificate to Azure File Share**:
-   ```bash
-   az storage file upload \
-     --share-name ssl-certs \
-     --source /etc/letsencrypt/live/your-domain/fullchain.pem \
-     --path aiportfolioanalysis.crt \
-     --account-name aiportfolioanalysiscerts \
-     --overwrite
-   ```
+### Automatic Renewal
 
-3. **Restart container group**:
-   ```bash
-   az container restart \
-     --resource-group your-resource-group \
-     --name aiportfolioanalysis-https
-   ```
+✅ **No Action Required** - Caddy automatically renews certificates before expiration!
+
+### Monitoring
+
+Check certificate status:
+```bash
+# View Caddy logs
+az container logs \
+  --resource-group your-resource-group \
+  --name aiportfolioanalysis-https \
+  --container-name caddy-proxy
+
+# Check certificate expiration via Caddy admin API
+curl https://aiportfolioanalysis.southcentralus.azurecontainer.io:2019/config/apps/tls/certificates
+```
 
 ## Monitoring and Troubleshooting
 

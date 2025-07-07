@@ -1,0 +1,26 @@
+FROM caddy:2.8-alpine
+
+# Create directories for logs and data
+RUN mkdir -p /var/log/caddy /data /config
+
+# Copy Caddyfile
+COPY Caddyfile /etc/caddy/Caddyfile
+
+# Create non-root user
+RUN addgroup -g 1001 -S caddyuser && adduser -S caddyuser -G caddyuser
+
+# Set proper permissions
+RUN chown -R caddyuser:caddyuser /var/log/caddy /data /config /etc/caddy
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+    CMD wget --no-verbose --tries=1 --spider http://localhost:2019/metrics || exit 1
+
+# Switch to non-root user
+USER caddyuser
+
+# Expose ports
+EXPOSE 80 443 2019
+
+# Start Caddy
+CMD ["caddy", "run", "--config", "/etc/caddy/Caddyfile", "--adapter", "caddyfile"]
