@@ -118,24 +118,9 @@ app.MapGet("/api/auth/callback", (HttpContext context) =>
 {
     if (context.User.Identity?.IsAuthenticated == true)
     {
-        var user = new
-        {
-            Name = context.User.Identity.Name,
-            Email = context.User.FindFirst(ClaimTypes.Email)?.Value,
-            Picture = context.User.FindFirst("picture")?.Value
-        };
-        
-        try
-        {
-            var userJson = JsonSerializer.Serialize(user);
-            var redirectUrl = $"{frontendUrlForEndpoints}/dashboard?user={Uri.EscapeDataString(userJson)}";
-            return Results.Redirect(redirectUrl);
-        }
-        catch (Exception ex)
-        {
-            app.Logger.LogError(ex, "Failed to serialize user data for redirect");
-            return Results.Redirect($"{frontendUrlForEndpoints}/dashboard");
-        }
+        // User is authenticated, session is established
+        // Redirect to dashboard without exposing user data in URL
+        return Results.Redirect($"{frontendUrlForEndpoints}/dashboard");
     }
     
     return Results.Redirect($"{frontendUrlForEndpoints}/login?error=authentication_failed");

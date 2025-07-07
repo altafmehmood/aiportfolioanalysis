@@ -172,24 +172,8 @@ export class DashboardComponent implements OnInit {
   ) {}
 
   ngOnInit(): void {
-    // Check for user data in query params (from OAuth callback)
-    this.route.queryParams.subscribe(params => {
-      if (params['user']) {
-        try {
-          const userData = JSON.parse(decodeURIComponent(params['user']));
-          this.authService.setUser(userData);
-          this.user = userData;
-          // Remove query params from URL
-          this.router.navigate([], { queryParams: {} });
-          // Load weather data after successful login
-          this.loadWeatherForecast();
-        } catch (e) {
-          this.checkAuthAndRedirect();
-        }
-      } else {
-        this.checkAuthAndRedirect();
-      }
-    });
+    // Initialize authentication using secure API endpoint
+    this.checkAuthAndRedirect();
 
     // Subscribe to auth service for user updates
     this.authService.user$.subscribe(user => {
