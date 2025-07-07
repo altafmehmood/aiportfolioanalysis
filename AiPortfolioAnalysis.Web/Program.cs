@@ -1,4 +1,6 @@
 using Microsoft.AspNetCore.Authentication;
+using System.Security.Claims;
+using System.Text.Json;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -35,7 +37,7 @@ var authBuilder = builder.Services.AddAuthentication(options =>
     options.Cookie.SecurePolicy = builder.Environment.IsDevelopment() 
         ? CookieSecurePolicy.SameAsRequest 
         : CookieSecurePolicy.Always;
-    options.Cookie.HttpOnly = false; // Allow JavaScript access for SPA
+    options.Cookie.HttpOnly = true; // Secure cookies - use separate tokens for SPA if needed
     options.ExpireTimeSpan = TimeSpan.FromDays(30);
     options.SlidingExpiration = true;
 });
@@ -52,8 +54,12 @@ if (hasGoogleAuth)
 
 builder.Services.AddAuthorization();
 
-// Add CORS
+// Get frontend URL configuration with validation
 var frontendUrl = builder.Configuration["Frontend:BaseUrl"] ?? "http://localhost:4200";
+if (!Uri.TryCreate(frontendUrl, UriKind.Absolute, out var frontendUri))
+{
+    throw new InvalidOperationException($"Invalid Frontend:BaseUrl configuration: '{frontendUrl}'. Must be a valid absolute URL.");
+}
 builder.Services.AddCors(options =>
 {
     options.AddDefaultPolicy(corsBuilder =>
@@ -84,8 +90,8 @@ builder.Services.AddSpaStaticFiles(configuration =>
 
 var app = builder.Build();
 
-// Get frontend URL for use in endpoints
-var frontendUrlForEndpoints = app.Configuration["Frontend:BaseUrl"] ?? "http://localhost:4200";
+// Use the same frontend URL configuration for endpoints
+var frontendUrlForEndpoints = frontendUrl;
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
@@ -123,10 +129,19 @@ app.MapGet("/api/auth/callback", (HttpContext context) =>
         var user = new
         {
             Name = context.User.Identity.Name,
-            Email = context.User.FindFirst("http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress")?.Value,
+            Email = context.User.FindFirst(ClaimTypes.Email)?.Value,
             Picture = context.User.FindFirst("picture")?.Value
         };
-        return Results.Redirect($"{frontendUrlForEndpoints}/dashboard?user={Uri.EscapeDataString(System.Text.Json.JsonSerializer.Serialize(user))}");
+        try
+        {
+            var userJson = JsonSerializer.Serialize(user);
+            return Results.Redirect($"{frontendUrlForEndpoints}/dashboard?user={Uri.EscapeDataString(userJson)}");
+        }
+        catch (Exception ex)
+        {
+            app.Logger.LogError(ex, "Failed to serialize user data for redirect");
+            return Results.Redirect($"{frontendUrlForEndpoints}/dashboard");
+        }
     }
     return Results.Redirect($"{frontendUrlForEndpoints}/login?error=authentication_failed");
 });
@@ -138,7 +153,7 @@ app.MapGet("/api/auth/user", (HttpContext context) =>
         return Results.Ok(new
         {
             Name = context.User.Identity.Name,
-            Email = context.User.FindFirst("http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress")?.Value,
+            Email = context.User.FindFirst(ClaimTypes.Email)?.Value,
             Picture = context.User.FindFirst("picture")?.Value
         });
     }

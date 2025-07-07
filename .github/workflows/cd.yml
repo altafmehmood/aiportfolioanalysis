@@ -49,10 +49,11 @@ jobs:
     - name: Get container FQDN for environment variables
       id: container_url
       run: |
-        # Generate expected FQDN for the container instance
-        CONTAINER_FQDN="${{ env.ACI_NAME }}.southcentralus.azurecontainer.io"
+        # Get the region from deployment location and generate FQDN
+        REGION=$(echo "South Central US" | tr '[:upper:]' '[:lower:]' | sed 's/ //g')
+        CONTAINER_FQDN="${{ env.ACI_NAME }}.${REGION}.azurecontainer.io"
         echo "fqdn=$CONTAINER_FQDN" >> $GITHUB_OUTPUT
-        echo "frontend_url=http://$CONTAINER_FQDN" >> $GITHUB_OUTPUT
+        echo "frontend_url=https://$CONTAINER_FQDN" >> $GITHUB_OUTPUT
 
     - name: Deploy to Azure Container Instance
       uses: azure/aci-deploy@v1
@@ -80,23 +81,42 @@ jobs:
         echo "Waiting for container to start..."
         sleep 30
         
-        # Get the FQDN of the container instance
+        # Get the FQDN of the container instance with error handling
         FQDN=$(az container show \
           --resource-group ${{ env.ACI_RESOURCE_GROUP }} \
           --name ${{ env.ACI_NAME }} \
           --query ipAddress.fqdn \
-          --output tsv)
+          --output tsv 2>/dev/null || echo "")
+        
+        if [ -z "$FQDN" ]; then
+          echo "❌ Failed to get container FQDN"
+          exit 1
+        fi
         
         echo "Container FQDN: $FQDN"
         
-        # Health check
-        HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://$FQDN || echo "000")
+        # Health check with retry logic
+        MAX_RETRIES=5
+        RETRY_COUNT=0
+        HTTP_STATUS="000"
         
-        if [ "$HTTP_STATUS" -eq 200 ]; then
-          echo "✅ Deployment successful - Application is responding"
-          echo "🌐 Application URL: http://$FQDN"
-        else
-          echo "❌ Deployment failed - HTTP Status: $HTTP_STATUS"
+        while [ $RETRY_COUNT -lt $MAX_RETRIES ] && [ "$HTTP_STATUS" != "200" ]; do
+          echo "Health check attempt $((RETRY_COUNT + 1))/$MAX_RETRIES..."
+          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 http://$FQDN || echo "000")
+          
+          if [ "$HTTP_STATUS" = "200" ]; then
+            echo "✅ Deployment successful - Application is responding"
+            echo "🌐 Application URL: http://$FQDN"
+            break
+          else
+            echo "⏳ HTTP Status: $HTTP_STATUS, retrying in 15 seconds..."
+            sleep 15
+            RETRY_COUNT=$((RETRY_COUNT + 1))
+          fi
+        done
+        
+        if [ "$HTTP_STATUS" != "200" ]; then
+          echo "❌ Deployment failed after $MAX_RETRIES attempts - Final HTTP Status: $HTTP_STATUS"
           exit 1
         fi
 
