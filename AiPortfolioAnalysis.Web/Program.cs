@@ -60,31 +60,31 @@ builder.Services.AddAuthorization();
 // Use environment-aware fallback
 var defaultFrontendUrl = builder.Environment.IsDevelopment() ? "http://localhost:4200" : "http://example.com";
 var frontendUrl = builder.Configuration["Frontend:BaseUrl"] ?? defaultFrontendUrl;
-var logger = LoggerFactory.Create(config => config.AddConsole()).CreateLogger("Configuration");
-logger.LogInformation("=== Frontend URL Configuration ====");
-logger.LogInformation("Environment: {Environment}", builder.Environment.EnvironmentName);
-logger.LogInformation("Frontend:BaseUrl from config: {FrontendUrl}", frontendUrl);
-logger.LogInformation("All Frontend configuration values:");
+var configLogger = LoggerFactory.Create(config => config.AddConsole()).CreateLogger("Configuration");
+configLogger.LogInformation("=== Frontend URL Configuration ====");
+configLogger.LogInformation("Environment: {Environment}", builder.Environment.EnvironmentName);
+configLogger.LogInformation("Frontend:BaseUrl from config: {FrontendUrl}", frontendUrl);
+configLogger.LogInformation("All Frontend configuration values:");
 foreach (var config in builder.Configuration.AsEnumerable().Where(c => c.Key.StartsWith("Frontend")))
 {
-    logger.LogInformation("  {Key} = {Value}", config.Key, config.Value);
+    configLogger.LogInformation("  {Key} = {Value}", config.Key, config.Value);
 }
-logger.LogInformation("Environment variables related to Frontend:");
+configLogger.LogInformation("Environment variables related to Frontend:");
 foreach (DictionaryEntry envVar in Environment.GetEnvironmentVariables())
 {
     var key = envVar.Key.ToString();
     if (key?.Contains("Frontend", StringComparison.OrdinalIgnoreCase) == true)
     {
-        logger.LogInformation("  ENV {Key} = {Value}", key, envVar.Value);
+        configLogger.LogInformation("  ENV {Key} = {Value}", key, envVar.Value);
     }
 }
 if (!Uri.TryCreate(frontendUrl, UriKind.Absolute, out var frontendUri))
 {
-    logger.LogError("Invalid Frontend:BaseUrl configuration: '{FrontendUrl}'. Must be a valid absolute URL.", frontendUrl);
+    configLogger.LogError("Invalid Frontend:BaseUrl configuration: '{FrontendUrl}'. Must be a valid absolute URL.", frontendUrl);
     throw new InvalidOperationException($"Invalid Frontend:BaseUrl configuration: '{frontendUrl}'. Must be a valid absolute URL.");
 }
-logger.LogInformation("Final frontend URL: {FrontendUrl}", frontendUrl);
-logger.LogInformation("======================================");
+configLogger.LogInformation("Final frontend URL: {FrontendUrl}", frontendUrl);
+configLogger.LogInformation("======================================");
 builder.Services.AddCors(options =>
 {
     options.AddDefaultPolicy(corsBuilder =>
