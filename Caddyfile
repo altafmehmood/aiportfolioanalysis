@@ -1,0 +1,91 @@
+aiportfolioanalysis.southcentralus.azurecontainer.io {
+    # Automatic HTTPS with Let's Encrypt
+    tls {
+        # Let's Encrypt will automatically provision certificates
+        # No additional configuration needed for basic setup
+    }
+
+    # Security headers
+    header {
+        # Security headers
+        Strict-Transport-Security "max-age=31536000; includeSubDomains"
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "DENY"
+        X-XSS-Protection "1; mode=block"
+        Referrer-Policy "strict-origin-when-cross-origin"
+        
+        # Remove server header for security
+        -Server
+    }
+
+    # Rate limiting
+    rate_limit {
+        zone api {
+            key {remote_host}
+            events 10
+            window 1m
+        }
+        zone auth {
+            key {remote_host}
+            events 5
+            window 1m
+        }
+    }
+
+    # Health check endpoint
+    handle /health {
+        reverse_proxy localhost:8080
+        rate_limit api
+    }
+
+    # API endpoints with rate limiting
+    handle /api/* {
+        reverse_proxy localhost:8080
+        rate_limit api
+    }
+
+    # Authentication endpoints with stricter rate limiting
+    handle /api/auth/* {
+        reverse_proxy localhost:8080
+        rate_limit auth
+    }
+
+    # Weather forecast endpoint
+    handle /weatherforecast {
+        reverse_proxy localhost:8080
+        rate_limit api
+    }
+
+    # Static files with caching
+    handle_path /static/* {
+        reverse_proxy localhost:8080
+        header Cache-Control "public, max-age=31536000, immutable"
+    }
+
+    # SPA and other requests
+    handle {
+        reverse_proxy localhost:8080
+        
+        # Enable compression
+        encode gzip
+        
+        # Set appropriate headers for SPA
+        header {
+            Cache-Control "no-cache, no-store, must-revalidate"
+            Pragma "no-cache"
+            Expires "0"
+        }
+    }
+
+    # Logging
+    log {
+        output file /var/log/caddy/access.log
+        format json
+        level INFO
+    }
+
+    # Error handling
+    handle_errors {
+        respond "Service temporarily unavailable" 503
+    }
+}
