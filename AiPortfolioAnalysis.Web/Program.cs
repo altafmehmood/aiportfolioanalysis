@@ -21,8 +21,10 @@ var authBuilder = builder.Services.AddAuthentication(options =>
 })
 .AddCookie("Cookies", options =>
 {
-    options.Cookie.SameSite = SameSiteMode.Lax; // Changed to Lax for HTTP development
-    options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest; // Allow HTTP in development
+    options.Cookie.SameSite = SameSiteMode.Lax;
+    options.Cookie.SecurePolicy = builder.Environment.IsDevelopment() 
+        ? CookieSecurePolicy.SameAsRequest 
+        : CookieSecurePolicy.Always;
     options.Cookie.HttpOnly = false; // Allow JavaScript access for SPA
     options.ExpireTimeSpan = TimeSpan.FromDays(30);
     options.SlidingExpiration = true;
@@ -41,24 +43,39 @@ if (hasGoogleAuth)
 builder.Services.AddAuthorization();
 
 // Add CORS
+var frontendUrl = builder.Configuration["Frontend:BaseUrl"] ?? "http://localhost:4200";
 builder.Services.AddCors(options =>
 {
-    options.AddDefaultPolicy(builder =>
+    options.AddDefaultPolicy(corsBuilder =>
     {
-        builder.WithOrigins("http://localhost:4200")
-               .WithMethods("GET", "POST", "PUT", "DELETE")
-               .WithHeaders("Content-Type", "Authorization")
-               .AllowCredentials(); // Allow cookies to be sent
+        if (builder.Environment.IsDevelopment())
+        {
+            corsBuilder.WithOrigins(frontendUrl)
+                      .WithMethods("GET", "POST", "PUT", "DELETE")
+                      .WithHeaders("Content-Type", "Authorization")
+                      .AllowCredentials();
+        }
+        else
+        {
+            // Production: More restrictive CORS
+            corsBuilder.WithOrigins(frontendUrl)
+                      .WithMethods("GET", "POST")
+                      .WithHeaders("Content-Type", "Authorization")
+                      .AllowCredentials();
+        }
     });
 });
 
 // Configure SPA services
 builder.Services.AddSpaStaticFiles(configuration =>
 {
-    configuration.RootPath = "ClientApp/dist/ClientApp";
+    configuration.RootPath = "wwwroot";
 });
 
 var app = builder.Build();
+
+// Get frontend URL for use in endpoints
+var frontendUrlForEndpoints = app.Configuration["Frontend:BaseUrl"] ?? "http://localhost:4200";
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
@@ -99,9 +116,9 @@ app.MapGet("/api/auth/callback", (HttpContext context) =>
             Email = context.User.FindFirst("http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress")?.Value,
             Picture = context.User.FindFirst("picture")?.Value
         };
-        return Results.Redirect($"http://localhost:4200/dashboard?user={Uri.EscapeDataString(System.Text.Json.JsonSerializer.Serialize(user))}");
+        return Results.Redirect($"{frontendUrlForEndpoints}/dashboard?user={Uri.EscapeDataString(System.Text.Json.JsonSerializer.Serialize(user))}");
     }
-    return Results.Redirect("http://localhost:4200/login?error=authentication_failed");
+    return Results.Redirect($"{frontendUrlForEndpoints}/login?error=authentication_failed");
 });
 
 app.MapGet("/api/auth/user", (HttpContext context) =>
@@ -122,7 +139,7 @@ app.MapPost("/api/auth/logout", (HttpContext context) =>
 {
     return Results.SignOut(new AuthenticationProperties
     {
-        RedirectUri = "http://localhost:4200"
+        RedirectUri = frontendUrlForEndpoints
     }, new[] { "Cookies" });
 });
 
@@ -149,7 +166,12 @@ app.MapWhen(x => !x.Request.Path.Value?.StartsWith("/weatherforecast") == true &
 {
     builder.UseSpa(spa =>
     {
-        spa.Options.SourcePath = "ClientApp";
+        spa.Options.SourcePath = "wwwroot";
+        spa.Options.DefaultPageStaticFileOptions = new StaticFileOptions
+        {
+            FileProvider = new Microsoft.Extensions.FileProviders.PhysicalFileProvider(
+                Path.Combine(app.Environment.ContentRootPath, "wwwroot"))
+        };
 
         if (app.Environment.IsDevelopment())
         {
