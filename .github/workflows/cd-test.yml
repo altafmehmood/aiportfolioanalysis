@@ -67,34 +67,52 @@ jobs:
         
         echo "✅ All required secrets are configured"
 
-    - name: Azure Login
+    - name: Azure Login (OIDC)
+      id: azure_login_oidc
+      continue-on-error: true
       uses: azure/login@v2
       with:
         client-id: ${{ secrets.AZURE_CLIENT_ID }}
         tenant-id: ${{ secrets.AZURE_TENANT_ID }}
         subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
+    - name: Azure Login (Fallback with Service Principal)
+      if: steps.azure_login_oidc.outcome == 'failure'
+      uses: azure/login@v2
+      with:
+        creds: ${{ secrets.AZURE_CREDENTIALS }}
+
     - name: Verify Azure Authentication
       run: |
         echo "🔐 Verifying Azure authentication for test environment..."
+        
+        # Show which authentication method was used
+        if [ "${{ steps.azure_login_oidc.outcome }}" = "success" ]; then
+          echo "✅ Authenticated via OIDC (recommended)"
+        else
+          echo "⚠️ OIDC failed, using service principal fallback"
+          echo "💡 Consider configuring federated identity credentials for better security"
+        fi
         
         # Test basic Azure CLI access
         if az account show &>/dev/null; then
           echo "✅ Azure authentication successful"
           az account show --query '{subscriptionId: id, tenantId: tenantId, name: name}' -o table
         else
-          echo "❌ Azure authentication failed"
+          echo "❌ Azure authentication failed with both methods"
           echo ""
-          echo "Common causes:"
-          echo "1. Federated identity credentials not configured in Azure AD"
-          echo "2. Service principal missing required permissions"
-          echo "3. Incorrect client ID, tenant ID, or subscription ID"
+          echo "🔧 Troubleshooting steps:"
+          echo "1. OIDC Setup (recommended):"
+          echo "   - Go to Azure AD > App registrations > github-actions-sp"
+          echo "   - Add federated identity credential for GitHub Actions"
+          echo "   - Subject: repo:${{ github.repository }}:environment:test"
+          echo "   - Issuer: https://token.actions.githubusercontent.com"
           echo ""
-          echo "To fix:"
-          echo "1. Go to Azure AD > App registrations > github-actions-sp"
-          echo "2. Add federated identity credential for GitHub Actions"
-          echo "3. Subject: repo:${{ github.repository }}:environment:test"
-          echo "4. Issuer: https://token.actions.githubusercontent.com"
+          echo "2. Service Principal Setup (fallback):"
+          echo "   - Ensure AZURE_CREDENTIALS secret contains valid JSON:"
+          echo "   - {\"clientId\":\"...\", \"clientSecret\":\"...\", \"subscriptionId\":\"...\", \"tenantId\":\"...\"}"
+          echo ""
+          echo "3. Verify the service principal has permissions on the resource group"
           exit 1
         fi
 
