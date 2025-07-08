@@ -1,0 +1,229 @@
+name: CD Test - Deploy Feature Branches to Test Environment
+
+on:
+  workflow_run:
+    workflows: ["CI - Build, Container Security & SARIF Upload"]
+    types:
+      - completed
+    branches: 
+      - 'feature/**'
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: 'Branch to deploy (for manual testing)'
+        required: false
+        default: 'feature/https-azure-container-groups'
+
+env:
+  REGISTRY: ${{ secrets.ACR_REGISTRY }}
+  ASPNET_IMAGE_NAME: aiportfolioanalysis
+  CADDY_IMAGE_NAME: caddy-proxy
+  RESOURCE_GROUP: ${{ secrets.TEST_RESOURCE_GROUP }}
+
+jobs:
+  deploy-test:
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    environment: test
+    permissions:
+      contents: read
+      id-token: write
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Azure Login
+      uses: azure/login@v2
+      with:
+        client-id: ${{ secrets.AZURE_CLIENT_ID }}
+        tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+        subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+    - name: Extract branch name and set variables
+      id: vars
+      run: |
+        # Get the branch name from the workflow run or manual input
+        if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          BRANCH_NAME="${{ github.event.inputs.branch || github.ref_name }}"
+          HEAD_SHA="${{ github.sha }}"
+        else
+          BRANCH_NAME="${{ github.event.workflow_run.head_branch }}"
+          HEAD_SHA="${{ github.event.workflow_run.head_sha }}"
+        fi
+        
+        # Skip if this is main branch (should go to production)
+        if [ "$BRANCH_NAME" = "main" ]; then
+          echo "Skipping deployment - main branch should use production pipeline"
+          exit 0
+        fi
+        
+        # Clean branch name for DNS (remove feature/ prefix, replace special chars)
+        CLEAN_BRANCH=$(echo "$BRANCH_NAME" | sed 's/^feature\///' | sed 's/[^a-zA-Z0-9-]/-/g' | tr '[:upper:]' '[:lower:]')
+        
+        # Limit length for DNS compatibility (max 63 chars for DNS label)
+        if [ ${#CLEAN_BRANCH} -gt 20 ]; then
+          CLEAN_BRANCH="${CLEAN_BRANCH:0:20}"
+        fi
+        
+        SHORT_SHA=$(echo "$HEAD_SHA" | cut -c1-7)
+        
+        # Set outputs
+        echo "branch_name=$BRANCH_NAME" >> $GITHUB_OUTPUT
+        echo "clean_branch=$CLEAN_BRANCH" >> $GITHUB_OUTPUT
+        echo "aci_name=test-$CLEAN_BRANCH" >> $GITHUB_OUTPUT
+        echo "dns_name=test-$CLEAN_BRANCH" >> $GITHUB_OUTPUT
+        echo "aspnet_image=${{ env.REGISTRY }}/${{ env.ASPNET_IMAGE_NAME }}:$BRANCH_NAME-$SHORT_SHA" >> $GITHUB_OUTPUT
+        echo "caddy_image=${{ env.REGISTRY }}/${{ env.CADDY_IMAGE_NAME }}:$BRANCH_NAME-$SHORT_SHA" >> $GITHUB_OUTPUT
+
+    - name: Get container FQDN for environment variables
+      id: container_url
+      run: |
+        REGION=$(echo "South Central US" | tr '[:upper:]' '[:lower:]' | sed 's/ //g')
+        CONTAINER_FQDN="${{ steps.vars.outputs.dns_name }}.${REGION}.azurecontainer.io"
+        echo "fqdn=$CONTAINER_FQDN" >> $GITHUB_OUTPUT
+        echo "frontend_url=https://$CONTAINER_FQDN" >> $GITHUB_OUTPUT
+
+    - name: Deploy to Test Environment
+      run: |
+        ACI_NAME="${{ steps.vars.outputs.aci_name }}"
+        DNS_NAME="${{ steps.vars.outputs.dns_name }}"
+        
+        # Delete existing container group if it exists
+        if az container show --resource-group ${{ env.RESOURCE_GROUP }} --name "$ACI_NAME" > /dev/null 2>&1; then
+          echo "Deleting existing test container: $ACI_NAME"
+          az container delete --resource-group ${{ env.RESOURCE_GROUP }} --name "$ACI_NAME" --yes
+          sleep 20
+        fi
+
+        # Create container group YAML configuration
+        cat > container-group.yaml <<EOF
+        apiVersion: 2021-10-01
+        location: South Central US
+        name: $ACI_NAME
+        properties:
+          containers:
+          - name: caddy-proxy
+            properties:
+              image: ${{ steps.vars.outputs.caddy_image }}
+              ports:
+              - port: 80
+              - port: 443
+              resources:
+                requests:
+                  cpu: 0.05
+                  memoryInGb: 0.05
+          - name: aspnet-backend
+            properties:
+              image: ${{ steps.vars.outputs.aspnet_image }}
+              ports:
+              - port: 8080
+              resources:
+                requests:
+                  cpu: 0.1
+                  memoryInGb: 0.1
+              environmentVariables:
+              - name: ASPNETCORE_ENVIRONMENT
+                value: Development
+              - name: ASPNETCORE_URLS
+                value: http://+:8080
+              - name: Authentication__Google__ClientId
+                secureValue: ${{ secrets.GOOGLE_CLIENTID_TEST != '' && secrets.GOOGLE_CLIENTID_TEST || secrets.GOOGLE_CLIENTID }}
+              - name: Authentication__Google__ClientSecret
+                secureValue: ${{ secrets.GOOGLE_CLIENTSECRET_TEST != '' && secrets.GOOGLE_CLIENTSECRET_TEST || secrets.GOOGLE_CLIENTSECRET }}
+              - name: Frontend__BaseUrl
+                value: ${{ steps.container_url.outputs.frontend_url }}
+          ipAddress:
+            type: Public
+            ports:
+            - port: 80
+            - port: 443
+            dnsNameLabel: $DNS_NAME
+          osType: Linux
+          restartPolicy: Always
+          imageRegistryCredentials:
+          - server: ${{ env.REGISTRY }}
+            username: ${{ secrets.ACR_USERNAME }}
+            password: ${{ secrets.ACR_PASSWORD }}
+        type: Microsoft.ContainerInstance/containerGroups
+        EOF
+
+        # Deploy container group
+        echo "Deploying test environment: $ACI_NAME"
+        az container create --resource-group ${{ env.RESOURCE_GROUP }} --file container-group.yaml
+
+    - name: Verify test deployment
+      run: |
+        ACI_NAME="${{ steps.vars.outputs.aci_name }}"
+        
+        echo "Waiting for test container to start..."
+        sleep 45
+        
+        # Get the FQDN of the container instance
+        FQDN=$(az container show \
+          --resource-group ${{ env.RESOURCE_GROUP }} \
+          --name "$ACI_NAME" \
+          --query ipAddress.fqdn \
+          --output tsv)
+        
+        if [ -z "$FQDN" ]; then
+          echo "❌ Failed to get test container FQDN"
+          exit 1
+        fi
+        
+        echo "Test Container FQDN: $FQDN"
+        
+        # Basic health check (fewer retries for test environment)
+        MAX_RETRIES=5
+        RETRY_COUNT=0
+        HTTP_STATUS="000"
+        
+        while [ $RETRY_COUNT -lt $MAX_RETRIES ] && [ "$HTTP_STATUS" != "200" ]; do
+          echo "Test health check attempt $((RETRY_COUNT + 1))/$MAX_RETRIES..."
+          
+          # Check HTTP endpoint (HTTPS may take longer for cert provisioning)
+          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 http://$FQDN || echo "000")
+          
+          if [ "$HTTP_STATUS" = "200" ]; then
+            echo "✅ Test deployment successful - Application is responding"
+            echo "🧪 Test URL: http://$FQDN"
+            echo "🔗 HTTPS URL: https://$FQDN (may take a few minutes for SSL cert)"
+            break
+          else
+            echo "⏳ HTTP Status: $HTTP_STATUS, retrying in 20 seconds..."
+            sleep 20
+            RETRY_COUNT=$((RETRY_COUNT + 1))
+          fi
+        done
+        
+        if [ "$HTTP_STATUS" != "200" ]; then
+          echo "⚠️ Test deployment may need more time - HTTP Status: $HTTP_STATUS"
+          echo "📋 Container logs:"
+          az container logs --resource-group ${{ env.RESOURCE_GROUP }} --name "$ACI_NAME" --container-name aspnet-backend --tail 20 || echo "Could not retrieve logs"
+          echo "🔍 Container will continue starting. Check logs manually if needed."
+        fi
+
+    - name: Create test deployment summary
+      run: |
+        ACI_NAME="${{ steps.vars.outputs.aci_name }}"
+        FQDN=$(az container show \
+          --resource-group ${{ env.RESOURCE_GROUP }} \
+          --name "$ACI_NAME" \
+          --query ipAddress.fqdn \
+          --output tsv 2>/dev/null || echo "pending")
+        
+        echo "## 🧪 Test Deployment Summary" >> $GITHUB_STEP_SUMMARY
+        echo "- **Environment**: Test" >> $GITHUB_STEP_SUMMARY
+        echo "- **Branch**: ${{ steps.vars.outputs.branch_name }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Container**: $ACI_NAME" >> $GITHUB_STEP_SUMMARY
+        echo "- **ASP.NET Image**: ${{ steps.vars.outputs.aspnet_image }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Caddy Image**: ${{ steps.vars.outputs.caddy_image }}" >> $GITHUB_STEP_SUMMARY
+        if [ "$FQDN" != "pending" ]; then
+          echo "- **Test URL**: http://$FQDN" >> $GITHUB_STEP_SUMMARY
+          echo "- **HTTPS URL**: https://$FQDN (SSL cert provisioning in progress)" >> $GITHUB_STEP_SUMMARY
+        fi
+        echo "- **Status**: 🚀 Deployed (may need a few minutes to fully start)" >> $GITHUB_STEP_SUMMARY
+
+    - name: Cleanup
+      run: rm -f container-group.yaml
+      if: always()

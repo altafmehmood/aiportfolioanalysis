@@ -2,20 +2,55 @@
 
 # Azure Container Instances Deployment Script for Caddy + ASP.NET
 # This script deploys a multi-container setup with Caddy reverse proxy and ASP.NET backend
-# Designed for GitHub Actions with secrets
+# Supports multiple environments (test/production)
 
 set -e
 
-# Configuration - Using GitHub secrets
-RESOURCE_GROUP="${AZURE_RESOURCE_GROUP:-aiportfolioanalysis}"
+# Environment detection
+ENVIRONMENT="${DEPLOYMENT_ENVIRONMENT:-production}"
+BRANCH_NAME="${GITHUB_REF_NAME:-main}"
+
+echo "🚀 Starting deployment for environment: $ENVIRONMENT"
+echo "📝 Branch: $BRANCH_NAME"
+
+# Environment-specific configuration
+if [ "$ENVIRONMENT" = "test" ]; then
+    RESOURCE_GROUP="${TEST_RESOURCE_GROUP:-aiportfolioanalysis-test-rg}"
+    CONTAINER_GROUP_NAME="${TEST_ACI_NAME:-aiportfolioanalysis-test}"
+    DNS_NAME="${TEST_DNS_NAME:-aiportfolioanalysis-test}"
+    CADDY_CPU="0.05"
+    CADDY_MEMORY="0.05"
+    ASPNET_CPU="0.1"
+    ASPNET_MEMORY="0.1"
+    ASPNET_ENV="Development"
+    echo "🧪 Deploying to TEST environment"
+else
+    RESOURCE_GROUP="${PROD_RESOURCE_GROUP:-aiportfolioanalysis-prod-rg}"
+    CONTAINER_GROUP_NAME="${PROD_ACI_NAME:-aiportfolioanalysis-prod}"
+    DNS_NAME="${PROD_DNS_NAME:-aiportfolioanalysis}"
+    CADDY_CPU="0.1"
+    CADDY_MEMORY="0.1"
+    ASPNET_CPU="0.2"
+    ASPNET_MEMORY="0.2"
+    ASPNET_ENV="Production"
+    echo "🏭 Deploying to PRODUCTION environment"
+fi
+
 LOCATION="${AZURE_LOCATION:-southcentralus}"
 REGISTRY_NAME="${AZURE_REGISTRY_NAME:-aiportfolioanalysis}"
-CONTAINER_GROUP_NAME="${AZURE_CONTAINER_GROUP_NAME:-aiportfolioanalysis}"
-DNS_NAME="${AZURE_DNS_NAME:-aiportfolioanalysis}"
+
+# Determine image tags based on branch
+if [ "$BRANCH_NAME" = "main" ]; then
+    IMAGE_TAG="latest"
+else
+    # For feature branches, use branch-specific tags
+    CLEAN_BRANCH=$(echo "$BRANCH_NAME" | sed 's/[^a-zA-Z0-9-]/-/g')
+    IMAGE_TAG="$CLEAN_BRANCH-$(echo $GITHUB_SHA | cut -c1-7)"
+fi
 
 # Image names - must match CI workflow
-CADDY_IMAGE="$REGISTRY_NAME.azurecr.io/caddy-proxy:latest"
-ASPNET_IMAGE="$REGISTRY_NAME.azurecr.io/aiportfolioanalysis:latest"
+CADDY_IMAGE="$REGISTRY_NAME.azurecr.io/caddy-proxy:$IMAGE_TAG"
+ASPNET_IMAGE="$REGISTRY_NAME.azurecr.io/aiportfolioanalysis:$IMAGE_TAG"
 
 # Check if logged in to Azure
 echo "Checking Azure login status..."
@@ -62,8 +97,8 @@ properties:
       - port: 443
       resources:
         requests:
-          cpu: 0.5
-          memoryInGb: 1
+          cpu: $CADDY_CPU
+          memoryInGb: $CADDY_MEMORY
   - name: aspnet-backend
     properties:
       image: $ASPNET_IMAGE
@@ -71,17 +106,19 @@ properties:
       - port: 8080
       resources:
         requests:
-          cpu: 0.5
-          memoryInGb: 1
+          cpu: $ASPNET_CPU
+          memoryInGb: $ASPNET_MEMORY
       environmentVariables:
       - name: ASPNETCORE_ENVIRONMENT
-        value: Production
+        value: $ASPNET_ENV
       - name: ASPNETCORE_URLS
         value: http://+:8080
-      - name: GOOGLE_CLIENTID
+      - name: Authentication__Google__ClientId
         secureValue: $GOOGLE_CLIENTID
-      - name: GOOGLE_CLIENTSECRET
+      - name: Authentication__Google__ClientSecret
         secureValue: $GOOGLE_CLIENTSECRET
+      - name: Frontend__BaseUrl
+        value: https://$DNS_NAME.southcentralus.azurecontainer.io
   ipAddress:
     type: Public
     ports:

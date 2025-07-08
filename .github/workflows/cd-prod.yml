@@ -1,0 +1,194 @@
+name: CD Production - Deploy to Azure Container Instance
+
+on:
+  workflow_run:
+    workflows: ["CI - Build, Container Security & SARIF Upload"]
+    types:
+      - completed
+    branches: [ main ]
+
+env:
+  REGISTRY: ${{ secrets.ACR_REGISTRY }}
+  ASPNET_IMAGE_NAME: aiportfolioanalysis
+  CADDY_IMAGE_NAME: caddy-proxy
+  RESOURCE_GROUP: ${{ secrets.PROD_RESOURCE_GROUP }}
+  ACI_NAME: ${{ secrets.PROD_ACI_NAME }}
+  DNS_NAME: ${{ secrets.PROD_DNS_NAME }}
+
+jobs:
+  deploy-production:
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    environment: production
+    permissions:
+      contents: read
+      id-token: write
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Azure Login
+      uses: azure/login@v2
+      with:
+        client-id: ${{ secrets.AZURE_CLIENT_ID }}
+        tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+        subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+    - name: Get image tags
+      id: image
+      run: |
+        SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
+        echo "aspnet_image=${{ env.REGISTRY }}/${{ env.ASPNET_IMAGE_NAME }}:main-$SHORT_SHA" >> $GITHUB_OUTPUT
+        echo "caddy_image=${{ env.REGISTRY }}/${{ env.CADDY_IMAGE_NAME }}:main-$SHORT_SHA" >> $GITHUB_OUTPUT
+
+    - name: Get container FQDN for environment variables
+      id: container_url
+      run: |
+        REGION=$(echo "South Central US" | tr '[:upper:]' '[:lower:]' | sed 's/ //g')
+        CONTAINER_FQDN="${{ env.DNS_NAME }}.${REGION}.azurecontainer.io"
+        echo "fqdn=$CONTAINER_FQDN" >> $GITHUB_OUTPUT
+        echo "frontend_url=https://$CONTAINER_FQDN" >> $GITHUB_OUTPUT
+
+    - name: Deploy to Azure Container Instance
+      run: |
+        # Delete existing container group if it exists
+        if az container show --resource-group ${{ env.RESOURCE_GROUP }} --name ${{ env.ACI_NAME }} > /dev/null 2>&1; then
+          echo "Deleting existing container group..."
+          az container delete --resource-group ${{ env.RESOURCE_GROUP }} --name ${{ env.ACI_NAME }} --yes
+          sleep 30
+        fi
+
+        # Create container group YAML configuration
+        cat > container-group.yaml <<EOF
+        apiVersion: 2021-10-01
+        location: South Central US
+        name: ${{ env.ACI_NAME }}
+        properties:
+          containers:
+          - name: caddy-proxy
+            properties:
+              image: ${{ steps.image.outputs.caddy_image }}
+              ports:
+              - port: 80
+              - port: 443
+              resources:
+                requests:
+                  cpu: 0.1
+                  memoryInGb: 0.1
+          - name: aspnet-backend
+            properties:
+              image: ${{ steps.image.outputs.aspnet_image }}
+              ports:
+              - port: 8080
+              resources:
+                requests:
+                  cpu: 0.2
+                  memoryInGb: 0.2
+              environmentVariables:
+              - name: ASPNETCORE_ENVIRONMENT
+                value: Production
+              - name: ASPNETCORE_URLS
+                value: http://+:8080
+              - name: Authentication__Google__ClientId
+                secureValue: ${{ secrets.GOOGLE_CLIENTID }}
+              - name: Authentication__Google__ClientSecret
+                secureValue: ${{ secrets.GOOGLE_CLIENTSECRET }}
+              - name: Frontend__BaseUrl
+                value: ${{ steps.container_url.outputs.frontend_url }}
+          ipAddress:
+            type: Public
+            ports:
+            - port: 80
+            - port: 443
+            dnsNameLabel: ${{ env.DNS_NAME }}
+          osType: Linux
+          restartPolicy: Always
+          imageRegistryCredentials:
+          - server: ${{ env.REGISTRY }}
+            username: ${{ secrets.ACR_USERNAME }}
+            password: ${{ secrets.ACR_PASSWORD }}
+        type: Microsoft.ContainerInstance/containerGroups
+        EOF
+
+        # Deploy container group
+        az container create --resource-group ${{ env.RESOURCE_GROUP }} --file container-group.yaml
+
+    - name: Verify deployment
+      run: |
+        echo "Waiting for container to start..."
+        sleep 60
+        
+        # Get the FQDN of the container instance
+        FQDN=$(az container show \
+          --resource-group ${{ env.RESOURCE_GROUP }} \
+          --name ${{ env.ACI_NAME }} \
+          --query ipAddress.fqdn \
+          --output tsv)
+        
+        if [ -z "$FQDN" ]; then
+          echo "❌ Failed to get container FQDN"
+          exit 1
+        fi
+        
+        echo "Container FQDN: $FQDN"
+        
+        # Health check with retry logic
+        MAX_RETRIES=10
+        RETRY_COUNT=0
+        HTTP_STATUS="000"
+        
+        while [ $RETRY_COUNT -lt $MAX_RETRIES ] && [ "$HTTP_STATUS" != "200" ]; do
+          echo "Health check attempt $((RETRY_COUNT + 1))/$MAX_RETRIES..."
+          
+          # Check HTTPS endpoint
+          echo "Checking HTTPS endpoint: https://$FQDN"
+          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 https://$FQDN || echo "000")
+          
+          if [ "$HTTP_STATUS" != "200" ]; then
+            echo "HTTPS failed with status $HTTP_STATUS, trying HTTP..."
+            HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 http://$FQDN || echo "000")
+          fi
+          
+          if [ "$HTTP_STATUS" = "200" ]; then
+            echo "✅ Production deployment successful - Application is responding"
+            echo "🌐 Application URL: https://$FQDN"
+            break
+          else
+            echo "⏳ HTTP Status: $HTTP_STATUS, retrying in 30 seconds..."
+            if [ $RETRY_COUNT -lt 5 ]; then
+              echo "📋 Container logs (last 10 lines):"
+              az container logs --resource-group ${{ env.RESOURCE_GROUP }} --name ${{ env.ACI_NAME }} --container-name aspnet-backend --tail 10 || echo "Could not retrieve logs"
+            fi
+            sleep 30
+            RETRY_COUNT=$((RETRY_COUNT + 1))
+          fi
+        done
+        
+        if [ "$HTTP_STATUS" != "200" ]; then
+          echo "❌ Production deployment failed after $MAX_RETRIES attempts - Final HTTP Status: $HTTP_STATUS"
+          echo "📋 Final container logs:"
+          az container logs --resource-group ${{ env.RESOURCE_GROUP }} --name ${{ env.ACI_NAME }} --container-name aspnet-backend --tail 50 || echo "Could not retrieve logs"
+          echo "🔍 Container details:"
+          az container show --resource-group ${{ env.RESOURCE_GROUP }} --name ${{ env.ACI_NAME }} --query "{state: instanceView.state, restartCount: instanceView.restartCount}" || echo "Could not retrieve details"
+          exit 1
+        fi
+
+    - name: Create deployment summary
+      run: |
+        FQDN=$(az container show \
+          --resource-group ${{ env.RESOURCE_GROUP }} \
+          --name ${{ env.ACI_NAME }} \
+          --query ipAddress.fqdn \
+          --output tsv)
+        
+        echo "## 🚀 Production Deployment Summary" >> $GITHUB_STEP_SUMMARY
+        echo "- **Environment**: Production" >> $GITHUB_STEP_SUMMARY
+        echo "- **ASP.NET Image**: ${{ steps.image.outputs.aspnet_image }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Caddy Image**: ${{ steps.image.outputs.caddy_image }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **URL**: https://$FQDN" >> $GITHUB_STEP_SUMMARY
+        echo "- **Status**: ✅ Successfully deployed" >> $GITHUB_STEP_SUMMARY
+
+    - name: Cleanup
+      run: rm -f container-group.yaml
+      if: always()
