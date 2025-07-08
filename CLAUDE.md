@@ -283,6 +283,7 @@ npm audit fix                      # Auto-fix vulnerabilities
 - Security scanning
 
 ## Git Workflow & Best Practices
+- Never commit to main branch directly. Always use feature, hotfix or release branches.
 
 ### Branch Management
 - **Main branch:** `main` - Production-ready code only
