@@ -32,6 +32,7 @@
 5. Add the following to "Authorized redirect URIs":
    ```
    http://localhost:5006/signin-google
+   https://aiportfolioanalysis.southcentralus.azurecontainer.io/signin-google
    ```
 6. Click "Create"
 7. Copy the Client ID and Client Secret
@@ -69,19 +70,28 @@ export Authentication__Google__ClientId="YOUR_ACTUAL_GOOGLE_CLIENT_ID"
 export Authentication__Google__ClientSecret="YOUR_ACTUAL_GOOGLE_CLIENT_SECRET"
 ```
 
-### 3. For Production
+### 3. For Production (Azure Container Instances with Caddy)
 
-Use secure configuration management:
-- **Azure**: Azure Key Vault
-- **AWS**: AWS Secrets Manager  
-- **Docker**: Environment variables
-- **Kubernetes**: Kubernetes Secrets
+**Important:** With Caddy as reverse proxy, update your Google OAuth configuration:
 
-Example for environment variables in production:
+#### Google Cloud Console Updates:
+1. **Authorized JavaScript Origins:**
+   ```
+   https://aiportfolioanalysis.southcentralus.azurecontainer.io
+   ```
+
+2. **Authorized Redirect URIs:**
+   ```
+   https://aiportfolioanalysis.southcentralus.azurecontainer.io/signin-google
+   ```
+
+#### Azure Container Instance Environment Variables:
 ```bash
-Authentication__Google__ClientId=YOUR_PRODUCTION_CLIENT_ID
-Authentication__Google__ClientSecret=YOUR_PRODUCTION_CLIENT_SECRET
+GOOGLE_CLIENTID=YOUR_PRODUCTION_CLIENT_ID
+GOOGLE_CLIENTSECRET=YOUR_PRODUCTION_CLIENT_SECRET
 ```
+
+**Note:** Caddy will automatically provision HTTPS certificates via Let's Encrypt.
 
 ## Running the Application
 
