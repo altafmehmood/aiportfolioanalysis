@@ -39,3 +39,18 @@ coverage/
 *.exe
 *.tmp
 *.temp
+packages/
+TestResults/
+*.nupkg
+*.snupkg
+project.lock.json
+project.fragment.lock.json
+artifacts/
+
+# Docker
+.dockerignore
+
+# Temporary files
+*.swp
+*.swo
+*~

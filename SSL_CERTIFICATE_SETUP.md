@@ -114,7 +114,7 @@ curl https://aiportfolioanalysis.southcentralus.azurecontainer.io:2019/config/ap
    az container logs \
      --resource-group your-resource-group \
      --name aiportfolioanalysis-https \
-     --container-name nginx-proxy
+     --container-name caddy-proxy
    ```
 
 2. **Test SSL configuration**:
@@ -135,7 +135,7 @@ curl https://aiportfolioanalysis.southcentralus.azurecontainer.io:2019/config/ap
 
 - Certificates are stored in Azure File Share with restricted access
 - Private keys are mounted with read-only permissions
-- NGINX configuration includes security headers
+- Caddy configuration includes security headers
 - Rate limiting is configured for API endpoints
 - HTTP traffic is redirected to HTTPS
 
