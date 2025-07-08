@@ -45,12 +45,17 @@ jobs:
       run: |
         # Get the branch name from the workflow run or manual input
         if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-          BRANCH_NAME="${{ github.event.inputs.branch || github.ref_name }}"
+          BRANCH_NAME="${{ github.event.inputs.branch }}"
+          if [ -z "$BRANCH_NAME" ]; then
+            BRANCH_NAME="${{ github.ref_name }}"
+          fi
           HEAD_SHA="${{ github.sha }}"
         else
           BRANCH_NAME="${{ github.event.workflow_run.head_branch }}"
           HEAD_SHA="${{ github.event.workflow_run.head_sha }}"
         fi
+        
+        echo "Detected branch: $BRANCH_NAME"
         
         # Skip if this is main branch (should go to production)
         if [ "$BRANCH_NAME" = "main" ]; then
