@@ -8,7 +8,8 @@ on:
 
 env:
   REGISTRY: ${{ secrets.ACR_REGISTRY }}
-  IMAGE_NAME: aiportfolioanalysis
+  ASPNET_IMAGE_NAME: aiportfolioanalysis
+  CADDY_IMAGE_NAME: caddy-proxy
 
 jobs:
   build:
@@ -33,62 +34,122 @@ jobs:
         username: ${{ secrets.ACR_USERNAME }}
         password: ${{ secrets.ACR_PASSWORD }}
 
-    - name: Extract metadata
-      id: meta
+    - name: Extract ASP.NET metadata
+      id: aspnet-meta
       uses: docker/metadata-action@v5
       with:
-        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+        images: ${{ env.REGISTRY }}/${{ env.ASPNET_IMAGE_NAME }}
         tags: |
           type=ref,event=branch
           type=ref,event=pr
           type=sha,format=short
           type=raw,value=latest,enable={{is_default_branch}}
 
-    - name: Build and push Docker image
+    - name: Extract Caddy metadata
+      id: caddy-meta
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ env.REGISTRY }}/${{ env.CADDY_IMAGE_NAME }}
+        tags: |
+          type=ref,event=branch
+          type=ref,event=pr
+          type=sha,format=short
+          type=raw,value=latest,enable={{is_default_branch}}
+
+    - name: Build and push ASP.NET Docker image
       uses: docker/build-push-action@v5
-      id: build
+      id: aspnet-build
       with:
         context: .
+        file: ./Dockerfile
         push: ${{ github.event_name != 'pull_request' }}
-        tags: ${{ steps.meta.outputs.tags }}
-        labels: ${{ steps.meta.outputs.labels }}
+        tags: ${{ steps.aspnet-meta.outputs.tags }}
+        labels: ${{ steps.aspnet-meta.outputs.labels }}
 
-    - name: Run security scan on local image (PR)
+    - name: Build and push Caddy Docker image
+      uses: docker/build-push-action@v5
+      id: caddy-build
+      with:
+        context: .
+        file: ./Dockerfile.caddy
+        push: ${{ github.event_name != 'pull_request' }}
+        tags: ${{ steps.caddy-meta.outputs.tags }}
+        labels: ${{ steps.caddy-meta.outputs.labels }}
+
+    - name: Run security scan on ASP.NET image (PR)
       uses: aquasecurity/trivy-action@0.28.0
       with:
-        image-ref: ${{ fromJSON(steps.meta.outputs.json).tags[0] }}
+        image-ref: ${{ fromJSON(steps.aspnet-meta.outputs.json).tags[0] }}
         format: 'sarif'
-        output: 'trivy-results.sarif'
+        output: 'trivy-aspnet-results.sarif'
       if: github.event_name == 'pull_request'
 
-    - name: Run security scan on pushed image (Push)
+    - name: Run security scan on Caddy image (PR)
       uses: aquasecurity/trivy-action@0.28.0
       with:
-        image-ref: ${{ fromJSON(steps.meta.outputs.json).tags[0] }}
+        image-ref: ${{ fromJSON(steps.caddy-meta.outputs.json).tags[0] }}
         format: 'sarif'
-        output: 'trivy-results.sarif'
+        output: 'trivy-caddy-results.sarif'
+      if: github.event_name == 'pull_request'
+
+    - name: Run security scan on ASP.NET image (Push)
+      uses: aquasecurity/trivy-action@0.28.0
+      with:
+        image-ref: ${{ fromJSON(steps.aspnet-meta.outputs.json).tags[0] }}
+        format: 'sarif'
+        output: 'trivy-aspnet-results.sarif'
       if: github.event_name != 'pull_request'
 
-    - name: Upload Trivy scan results
+    - name: Run security scan on Caddy image (Push)
+      uses: aquasecurity/trivy-action@0.28.0
+      with:
+        image-ref: ${{ fromJSON(steps.caddy-meta.outputs.json).tags[0] }}
+        format: 'sarif'
+        output: 'trivy-caddy-results.sarif'
+      if: github.event_name != 'pull_request'
+
+    - name: Upload ASP.NET Trivy scan results
       uses: github/codeql-action/upload-sarif@v3
       with:
-        sarif_file: 'trivy-results.sarif'
+        sarif_file: 'trivy-aspnet-results.sarif'
       continue-on-error: true
-      if: always() && hashFiles('trivy-results.sarif') != ''
+      if: always() && hashFiles('trivy-aspnet-results.sarif') != ''
+
+    - name: Upload Caddy Trivy scan results
+      uses: github/codeql-action/upload-sarif@v3
+      with:
+        sarif_file: 'trivy-caddy-results.sarif'
+      continue-on-error: true
+      if: always() && hashFiles('trivy-caddy-results.sarif') != ''
 
     - name: Archive security scan results
       uses: actions/upload-artifact@v4
       with:
         name: trivy-security-scan-results
-        path: trivy-results.sarif
+        path: |
+          trivy-aspnet-results.sarif
+          trivy-caddy-results.sarif
         retention-days: 30
-      if: always() && hashFiles('trivy-results.sarif') != ''
+      if: always() && (hashFiles('trivy-aspnet-results.sarif') != '' || hashFiles('trivy-caddy-results.sarif') != '')
 
     - name: Display security scan info
       run: |
-        if [ -f "trivy-results.sarif" ]; then
-          echo "🔍 Security scan completed successfully"
-          echo "📄 SARIF report generated: trivy-results.sarif"
+        aspnet_scan_exists=false
+        caddy_scan_exists=false
+        
+        if [ -f "trivy-aspnet-results.sarif" ]; then
+          aspnet_scan_exists=true
+          echo "🔍 ASP.NET security scan completed successfully"
+          echo "📄 ASP.NET SARIF report: trivy-aspnet-results.sarif"
+        fi
+        
+        if [ -f "trivy-caddy-results.sarif" ]; then
+          caddy_scan_exists=true
+          echo "🔍 Caddy security scan completed successfully"
+          echo "📄 Caddy SARIF report: trivy-caddy-results.sarif"
+        fi
+        
+        if [ "$aspnet_scan_exists" = true ] || [ "$caddy_scan_exists" = true ]; then
           echo ""
           echo "📊 To enable automatic security alerts in GitHub:"
           echo "1. Go to repository Settings → Security & analysis"
@@ -97,6 +158,6 @@ jobs:
           echo ""
           echo "📁 Security scan results are available as build artifacts"
         else
-          echo "❌ Security scan did not complete successfully"
+          echo "❌ No security scans completed successfully"
         fi
       if: always()

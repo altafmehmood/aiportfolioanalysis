@@ -13,9 +13,9 @@ REGISTRY_NAME="${AZURE_REGISTRY_NAME:-aiportfolioanalysis}"
 CONTAINER_GROUP_NAME="${AZURE_CONTAINER_GROUP_NAME:-aiportfolioanalysis}"
 DNS_NAME="${AZURE_DNS_NAME:-aiportfolioanalysis}"
 
-# Image names
+# Image names - must match CI workflow
 CADDY_IMAGE="$REGISTRY_NAME.azurecr.io/caddy-proxy:latest"
-ASPNET_IMAGE="$REGISTRY_NAME.azurecr.io/aspnet-app:latest"
+ASPNET_IMAGE="$REGISTRY_NAME.azurecr.io/aiportfolioanalysis:latest"
 
 # Check if logged in to Azure
 echo "Checking Azure login status..."
@@ -34,13 +34,9 @@ REGISTRY_SERVER=$(az acr show --name $REGISTRY_NAME --resource-group $RESOURCE_G
 REGISTRY_USERNAME=$(az acr credential show --name $REGISTRY_NAME --resource-group $RESOURCE_GROUP --query "username" --output tsv)
 REGISTRY_PASSWORD=$(az acr credential show --name $REGISTRY_NAME --resource-group $RESOURCE_GROUP --query "passwords[0].value" --output tsv)
 
-# Build and push Caddy image
-echo "Building and pushing Caddy image..."
-az acr build --registry $REGISTRY_NAME --image caddy-proxy:latest --file Dockerfile.caddy .
-
-# Build and push ASP.NET image
-echo "Building and pushing ASP.NET image..."
-az acr build --registry $REGISTRY_NAME --image aspnet-app:latest --file Dockerfile .
+echo "Using pre-built images from CI pipeline:"
+echo "  Caddy: $CADDY_IMAGE"
+echo "  ASP.NET: $ASPNET_IMAGE"
 
 # Delete existing container group if it exists
 echo "Checking for existing container group..."
