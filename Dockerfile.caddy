@@ -3,7 +3,7 @@ FROM caddy:2.8-alpine
 # Create directories for logs and data
 RUN mkdir -p /var/log/caddy /data /config
 
-# Copy Caddyfile
+# Copy Caddyfile (will be generated dynamically by CI)
 COPY Caddyfile /etc/caddy/Caddyfile
 
 # Create non-root user

@@ -163,8 +163,6 @@ jobs:
               environmentVariables:
               - name: LETS_ENCRYPT_EMAIL
                 secureValue: ${{ secrets.LETS_ENCRYPT_EMAIL }}
-              - name: CADDY_DOMAIN
-                value: aiportfolioanalysis-prod.southcentralus.azurecontainer.io
           - name: aspnet-backend
             properties:
               image: ${{ steps.image.outputs.aspnet_image }}
