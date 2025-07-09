@@ -192,8 +192,8 @@ jobs:
               - port: 443
               resources:
                 requests:
-                  cpu: 0.05
-                  memoryInGb: 0.05
+                  cpu: 0.1
+                  memoryInGb: 0.1
           - name: aspnet-backend
             properties:
               image: ${{ steps.vars.outputs.aspnet_image }}
