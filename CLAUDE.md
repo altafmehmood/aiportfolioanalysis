@@ -411,18 +411,18 @@ The project uses a 3-tier deployment strategy:
 
 ### Common Issues & Solutions
 
-#### 🔐 Azure Authentication Failures
-**Error**: "The client has no configured federated identity credentials"
+#### 🔐 Azure Authentication (OIDC)
+**Authentication Method**: OpenID Connect (OIDC) - Modern, secure, keyless authentication
 
-**Solution**: Configure OIDC in Azure Active Directory
+**Required Azure AD Configuration**:
 ```bash
-# Required Azure AD setup:
-1. Go to Azure AD > App registrations > github-actions-sp
-2. Add federated identity credentials:
+# In Azure AD > App registrations > github-actions-sp:
+1. Add federated identity credentials:
    - Entity: GitHub Actions deploying
    - Issuer: https://token.actions.githubusercontent.com
    - Subject (Production): repo:OWNER/REPO:environment:production
    - Subject (Test): repo:OWNER/REPO:environment:test
+   - Audience: api://AzureADTokenExchange
 ```
 
 #### 📝 Missing Secrets Configuration
