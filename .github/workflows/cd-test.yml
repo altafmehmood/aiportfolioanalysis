@@ -2,7 +2,7 @@ name: CD Test - Deploy Feature Branches to Test Environment
 
 on:
   workflow_run:
-    workflows: ["CI - Build, Container Security & SARIF Upload"]
+    workflows: ["CI - Build"]
     types:
       - completed
     branches-ignore:
@@ -21,8 +21,46 @@ env:
   RESOURCE_GROUP: ${{ secrets.ACI_RESOURCE_GROUP }}
 
 jobs:
+  check-secrets:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Echo required secrets for test deployment
+      run: |
+        echo "🔍 Checking all required secrets for test deployment..."
+        echo "========================================="
+        
+        echo "Container Registry Secrets:"
+        echo "- ACR_REGISTRY: ${{ secrets.ACR_REGISTRY != '' && '✅ Set' || '❌ Missing' }}"
+        echo "- ACR_USERNAME: ${{ secrets.ACR_USERNAME != '' && '✅ Set' || '❌ Missing' }}"
+        echo "- ACR_PASSWORD: ${{ secrets.ACR_PASSWORD != '' && '✅ Set' || '❌ Missing' }}"
+        echo ""
+        
+        echo "Azure Authentication Secrets:"
+        echo "- AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID != '' && '✅ Set' || '❌ Missing' }}"
+        echo "- AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID != '' && '✅ Set' || '❌ Missing' }}"
+        echo "- AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID != '' && '✅ Set' || '❌ Missing' }}"
+        echo ""
+        
+        echo "Azure Container Instance Secrets:"
+        echo "- ACI_RESOURCE_GROUP: ${{ secrets.ACI_RESOURCE_GROUP != '' && '✅ Set' || '❌ Missing' }}"
+        echo ""
+        
+        echo "Google OAuth Secrets (Test Environment):"
+        echo "- GOOGLE_CLIENTID_TEST: ${{ secrets.GOOGLE_CLIENTID_TEST != '' && '✅ Set' || '⚠️ Missing (will fallback to GOOGLE_CLIENTID)' }}"
+        echo "- GOOGLE_CLIENTSECRET_TEST: ${{ secrets.GOOGLE_CLIENTSECRET_TEST != '' && '✅ Set' || '⚠️ Missing (will fallback to GOOGLE_CLIENTSECRET)' }}"
+        echo ""
+        
+        echo "Google OAuth Secrets (Fallback):"
+        echo "- GOOGLE_CLIENTID: ${{ secrets.GOOGLE_CLIENTID != '' && '✅ Set' || '❌ Missing' }}"
+        echo "- GOOGLE_CLIENTSECRET: ${{ secrets.GOOGLE_CLIENTSECRET != '' && '✅ Set' || '❌ Missing' }}"
+        echo ""
+        
+        echo "========================================="
+        echo "ℹ️ Test environment will use *_TEST secrets if available, otherwise fallback to production secrets"
+
   deploy-test:
     runs-on: ubuntu-latest
+    needs: check-secrets
     if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
     environment: test
     permissions:

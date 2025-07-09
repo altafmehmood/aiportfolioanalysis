@@ -2,7 +2,7 @@ name: CD Production - Deploy to Azure Container Instance
 
 on:
   workflow_run:
-    workflows: ["CI - Build, Container Security & SARIF Upload"]
+    workflows: ["CI - Build"]
     types:
       - completed
     branches: [ main ]
@@ -16,8 +16,42 @@ env:
   DNS_NAME: ${{ secrets.ACI_NAME }}
 
 jobs:
+  check-secrets:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Echo required secrets for production deployment
+      run: |
+        echo "🔍 Checking all required secrets for production deployment..."
+        echo "========================================="
+        
+        echo "Container Registry Secrets:"
+        echo "- ACR_REGISTRY: ${{ secrets.ACR_REGISTRY != '' && '✅ Set' || '❌ Missing' }}"
+        echo "- ACR_USERNAME: ${{ secrets.ACR_USERNAME != '' && '✅ Set' || '❌ Missing' }}"
+        echo "- ACR_PASSWORD: ${{ secrets.ACR_PASSWORD != '' && '✅ Set' || '❌ Missing' }}"
+        echo ""
+        
+        echo "Azure Authentication Secrets:"
+        echo "- AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID != '' && '✅ Set' || '❌ Missing' }}"
+        echo "- AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID != '' && '✅ Set' || '❌ Missing' }}"
+        echo "- AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID != '' && '✅ Set' || '❌ Missing' }}"
+        echo ""
+        
+        echo "Azure Container Instance Secrets:"
+        echo "- ACI_RESOURCE_GROUP: ${{ secrets.ACI_RESOURCE_GROUP != '' && '✅ Set' || '❌ Missing' }}"
+        echo "- ACI_NAME: ${{ secrets.ACI_NAME != '' && '✅ Set' || '❌ Missing' }}"
+        echo ""
+        
+        echo "Google OAuth Secrets (Production):"
+        echo "- GOOGLE_CLIENTID: ${{ secrets.GOOGLE_CLIENTID != '' && '✅ Set' || '❌ Missing' }}"
+        echo "- GOOGLE_CLIENTSECRET: ${{ secrets.GOOGLE_CLIENTSECRET != '' && '✅ Set' || '❌ Missing' }}"
+        echo ""
+        
+        echo "========================================="
+        echo "ℹ️ Production deployment requires all secrets to be properly configured"
+
   deploy-production:
     runs-on: ubuntu-latest
+    needs: check-secrets
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
     environment: production
     permissions:
