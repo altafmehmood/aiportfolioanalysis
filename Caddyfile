@@ -1,10 +1,10 @@
 # Global configuration
 {
-    email admin@aiportfolioanalysis.com
+    email {env.LETS_ENCRYPT_EMAIL}
 }
 
-# Production configuration
-aiportfolioanalysis.southcentralus.azurecontainer.io {
+# Dynamic configuration based on environment
+{env.CADDY_DOMAIN} {
     # Simple reverse proxy to ASP.NET - let it handle all routing
     reverse_proxy aspnet-backend:8080 {
         header_up Host {host}
@@ -42,7 +42,7 @@ localhost {
     encode gzip zstd
 }
 
-# HTTP to HTTPS redirect for production
-http://aiportfolioanalysis.southcentralus.azurecontainer.io {
+# HTTP to HTTPS redirect
+http://{env.CADDY_DOMAIN} {
     redir https://{host}{uri} permanent
 }
