@@ -159,8 +159,8 @@ jobs:
         # Set outputs
         echo "branch_name=$BRANCH_NAME" >> $GITHUB_OUTPUT
         echo "clean_branch=$CLEAN_BRANCH" >> $GITHUB_OUTPUT
-        echo "aci_name=test-$CLEAN_BRANCH" >> $GITHUB_OUTPUT
-        echo "dns_name=test-$CLEAN_BRANCH" >> $GITHUB_OUTPUT
+        echo "aci_name=aiportfolioanalysis-test-$CLEAN_BRANCH" >> $GITHUB_OUTPUT
+        echo "dns_name=aiportfolioanalysis-test-$CLEAN_BRANCH" >> $GITHUB_OUTPUT
         echo "aspnet_image=${{ env.REGISTRY }}/${{ env.ASPNET_IMAGE_NAME }}:$DOCKER_BRANCH-$SHORT_SHA" >> $GITHUB_OUTPUT
         echo "caddy_image=${{ env.REGISTRY }}/${{ env.CADDY_IMAGE_NAME }}:$DOCKER_BRANCH-$SHORT_SHA" >> $GITHUB_OUTPUT
 

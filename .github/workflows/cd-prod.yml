@@ -12,8 +12,8 @@ env:
   ASPNET_IMAGE_NAME: aiportfolioanalysis
   CADDY_IMAGE_NAME: caddy-proxy
   RESOURCE_GROUP: ${{ secrets.ACI_RESOURCE_GROUP }}
-  ACI_NAME: ${{ secrets.ACI_NAME }}
-  DNS_NAME: ${{ secrets.ACI_NAME }}
+  ACI_NAME: aiportfolioanalysis-prod
+  DNS_NAME: aiportfolioanalysis-prod
 
 jobs:
   check-secrets:
