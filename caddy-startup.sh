@@ -7,6 +7,15 @@ echo "Caddy startup script starting..."
 LETS_ENCRYPT_EMAIL=${LETS_ENCRYPT_EMAIL:-"noreply@example.com"}
 CADDY_DOMAIN=${CADDY_DOMAIN:-"localhost"}
 
+# Handle empty environment variables (Azure Container Instances can pass empty strings)
+if [ -z "$LETS_ENCRYPT_EMAIL" ]; then
+    LETS_ENCRYPT_EMAIL="noreply@example.com"
+fi
+
+if [ -z "$CADDY_DOMAIN" ]; then
+    CADDY_DOMAIN="localhost"
+fi
+
 echo "Building for test environment"
 echo "Generated Caddyfile for domain: $CADDY_DOMAIN"
 
