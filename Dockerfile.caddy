@@ -12,33 +12,12 @@ RUN addgroup -g 1001 -S caddyuser && adduser -S caddyuser -G caddyuser
 # Set proper permissions
 RUN chown -R caddyuser:caddyuser /var/log/caddy /data /config /etc/caddy
 
-# Create startup script
-COPY <<EOF /etc/caddy/startup.sh
-#!/bin/sh
-set -e
+# Copy startup script
+COPY caddy-startup.sh /etc/caddy/startup.sh
 
-# Default values if environment variables are not set
-LETS_ENCRYPT_EMAIL=\${LETS_ENCRYPT_EMAIL:-"noreply@example.com"}
-CADDY_DOMAIN=\${CADDY_DOMAIN:-"localhost"}
-
-echo "Generating Caddyfile with:"
-echo "  Email: \$LETS_ENCRYPT_EMAIL"
-echo "  Domain: \$CADDY_DOMAIN"
-
-# Generate Caddyfile from template
-sed -e "s/__LETS_ENCRYPT_EMAIL__/\$LETS_ENCRYPT_EMAIL/g" \
-    -e "s/__CADDY_DOMAIN__/\$CADDY_DOMAIN/g" \
-    /etc/caddy/Caddyfile.template > /etc/caddy/Caddyfile
-
-echo "Generated Caddyfile:"
-cat /etc/caddy/Caddyfile
-
-# Start Caddy
-exec caddy run --config /etc/caddy/Caddyfile --adapter caddyfile
-EOF
-
-# Make startup script executable
-RUN chmod +x /etc/caddy/startup.sh
+# Make startup script executable and set proper permissions
+RUN chmod +x /etc/caddy/startup.sh && \
+    chown caddyuser:caddyuser /etc/caddy/startup.sh
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
