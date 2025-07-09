@@ -3,14 +3,42 @@ FROM caddy:2.8-alpine
 # Create directories for logs and data
 RUN mkdir -p /var/log/caddy /data /config
 
-# Copy Caddyfile (will be generated dynamically by CI)
-COPY Caddyfile /etc/caddy/Caddyfile
+# Copy Caddyfile template
+COPY Caddyfile.template /etc/caddy/Caddyfile.template
 
 # Create non-root user
 RUN addgroup -g 1001 -S caddyuser && adduser -S caddyuser -G caddyuser
 
 # Set proper permissions
 RUN chown -R caddyuser:caddyuser /var/log/caddy /data /config /etc/caddy
+
+# Create startup script
+COPY <<EOF /etc/caddy/startup.sh
+#!/bin/sh
+set -e
+
+# Default values if environment variables are not set
+LETS_ENCRYPT_EMAIL=\${LETS_ENCRYPT_EMAIL:-"noreply@example.com"}
+CADDY_DOMAIN=\${CADDY_DOMAIN:-"localhost"}
+
+echo "Generating Caddyfile with:"
+echo "  Email: \$LETS_ENCRYPT_EMAIL"
+echo "  Domain: \$CADDY_DOMAIN"
+
+# Generate Caddyfile from template
+sed -e "s/__LETS_ENCRYPT_EMAIL__/\$LETS_ENCRYPT_EMAIL/g" \
+    -e "s/__CADDY_DOMAIN__/\$CADDY_DOMAIN/g" \
+    /etc/caddy/Caddyfile.template > /etc/caddy/Caddyfile
+
+echo "Generated Caddyfile:"
+cat /etc/caddy/Caddyfile
+
+# Start Caddy
+exec caddy run --config /etc/caddy/Caddyfile --adapter caddyfile
+EOF
+
+# Make startup script executable
+RUN chmod +x /etc/caddy/startup.sh
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
@@ -22,5 +50,5 @@ USER caddyuser
 # Expose ports
 EXPOSE 80 443 2019
 
-# Start Caddy
-CMD ["caddy", "run", "--config", "/etc/caddy/Caddyfile", "--adapter", "caddyfile"]
+# Use startup script
+CMD ["/etc/caddy/startup.sh"]

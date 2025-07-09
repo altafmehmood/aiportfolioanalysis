@@ -208,6 +208,8 @@ jobs:
               environmentVariables:
               - name: LETS_ENCRYPT_EMAIL
                 secureValue: ${{ secrets.LETS_ENCRYPT_EMAIL }}
+              - name: CADDY_DOMAIN
+                value: ${{ steps.container_url.outputs.fqdn }}
           - name: aspnet-backend
             properties:
               image: ${{ steps.vars.outputs.aspnet_image }}
