@@ -400,3 +400,76 @@ Consider setting up pre-commit hooks for:
 - Test execution
 - Commit message validation
 
+## CI/CD Pipeline & Troubleshooting
+
+### Pipeline Architecture
+The project uses a 3-tier deployment strategy:
+
+1. **CI Pipeline** (`ci.yml`): Builds, tests, and scans all branches
+2. **Test CD** (`cd-test.yml`): Deploys feature branches to test environment
+3. **Production CD** (`cd-prod.yml`): Deploys main branch to production
+
+### Common Issues & Solutions
+
+#### 🔐 Azure Authentication (OIDC)
+**Authentication Method**: OpenID Connect (OIDC) - Modern, secure, keyless authentication
+
+**Required Azure AD Configuration**:
+```bash
+# In Azure AD > App registrations > github-actions-sp:
+1. Add federated identity credentials:
+   - Entity: GitHub Actions deploying
+   - Issuer: https://token.actions.githubusercontent.com
+   - Subject (Production): repo:OWNER/REPO:environment:production
+   - Subject (Test): repo:OWNER/REPO:environment:test
+   - Audience: api://AzureADTokenExchange
+```
+
+#### 📝 Missing Secrets Configuration
+**Required GitHub Secrets:**
+- `ACR_REGISTRY` - Azure Container Registry URL
+- `ACR_USERNAME` - Container registry username
+- `ACR_PASSWORD` - Container registry password
+- `ACI_RESOURCE_GROUP` - Azure resource group name
+- `ACI_NAME` - Container instance name for production
+- `AZURE_CLIENT_ID` - Service principal client ID
+- `AZURE_TENANT_ID` - Azure tenant ID
+- `AZURE_SUBSCRIPTION_ID` - Azure subscription ID
+- `GOOGLE_CLIENTID` - Google OAuth client ID
+- `GOOGLE_CLIENTSECRET` - Google OAuth client secret
+
+#### 🚀 Deployment Pipeline Triggers
+**Feature Branches**: Deploy automatically after CI success (except main)
+**Main Branch**: Deploy to production after CI success
+**Manual**: Use workflow_dispatch for manual deployments
+
+#### 🔧 Container Deployment Issues
+**Common Problems:**
+- Resource group doesn't exist
+- Container registry permissions
+- Image not found (check build logs)
+- Resource quota exceeded
+
+**Debugging Steps:**
+```bash
+# Check container logs
+az container logs --resource-group RG_NAME --name CONTAINER_NAME
+
+# Check container status
+az container show --resource-group RG_NAME --name CONTAINER_NAME
+
+# Manual deployment test
+az container create --resource-group RG_NAME --file container-group.yaml
+```
+
+### Environment Management
+**Test Environment**: 
+- Deploys feature branches with dynamic naming
+- Uses reduced resource allocation
+- Shorter health check timeouts
+
+**Production Environment**:
+- Deploys only from main branch
+- Full resource allocation
+- Extended health checks with retries
+

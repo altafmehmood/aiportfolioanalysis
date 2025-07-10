@@ -3,8 +3,14 @@ FROM caddy:2.8-alpine
 # Create directories for logs and data
 RUN mkdir -p /var/log/caddy /data /config
 
-# Copy Caddyfile
-COPY Caddyfile /etc/caddy/Caddyfile
+# Copy Caddyfile template
+COPY Caddyfile.template /etc/caddy/Caddyfile.template
+
+# Copy startup script
+COPY caddy-startup.sh /etc/caddy/startup.sh
+
+# Make startup script executable
+RUN chmod +x /etc/caddy/startup.sh
 
 # Create non-root user
 RUN addgroup -g 1001 -S caddyuser && adduser -S caddyuser -G caddyuser
@@ -22,5 +28,5 @@ USER caddyuser
 # Expose ports
 EXPOSE 80 443 2019
 
-# Start Caddy
-CMD ["caddy", "run", "--config", "/etc/caddy/Caddyfile", "--adapter", "caddyfile"]
+# Use startup script
+CMD ["/etc/caddy/startup.sh"]

@@ -1,4 +1,4 @@
-name: CI - Build, Container Security & SARIF Upload
+name: CI - Build
 
 on:
   push:
@@ -17,7 +17,6 @@ jobs:
     permissions:
       contents: read
       packages: write
-      security-events: write  # Required for SARIF upload to GitHub Security tab
       actions: read          # Required for accessing workflow run metadata
 
     steps:
@@ -34,16 +33,23 @@ jobs:
         username: ${{ secrets.ACR_USERNAME }}
         password: ${{ secrets.ACR_PASSWORD }}
 
+    - name: Generate semantic version
+      id: version
+      run: |
+        VERSION="0.1.${{ github.run_number }}"
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+        echo "Generated version: $VERSION"
+
     - name: Extract ASP.NET metadata
       id: aspnet-meta
       uses: docker/metadata-action@v5
       with:
         images: ${{ env.REGISTRY }}/${{ env.ASPNET_IMAGE_NAME }}
         tags: |
+          type=raw,value=${{ steps.version.outputs.version }}
+          type=raw,value=latest,enable={{is_default_branch}}
           type=ref,event=branch
           type=ref,event=pr
-          type=sha,format=short,prefix={{branch}}-
-          type=raw,value=latest,enable={{is_default_branch}}
 
     - name: Extract Caddy metadata
       id: caddy-meta
@@ -51,10 +57,10 @@ jobs:
       with:
         images: ${{ env.REGISTRY }}/${{ env.CADDY_IMAGE_NAME }}
         tags: |
+          type=raw,value=${{ steps.version.outputs.version }}
+          type=raw,value=latest,enable={{is_default_branch}}
           type=ref,event=branch
           type=ref,event=pr
-          type=sha,format=short,prefix={{branch}}-
-          type=raw,value=latest,enable={{is_default_branch}}
 
     - name: Build and push ASP.NET Docker image
       uses: docker/build-push-action@v5
@@ -66,6 +72,25 @@ jobs:
         tags: ${{ steps.aspnet-meta.outputs.tags }}
         labels: ${{ steps.aspnet-meta.outputs.labels }}
 
+    - name: Generate Caddyfile for environment
+      run: |
+        # Determine environment based on branch
+        if [ "${{ github.ref_name }}" = "main" ]; then
+          CADDY_DOMAIN="aiportfolioanalysis-prod.southcentralus.azurecontainer.io"
+          echo "Building for production environment"
+        else
+          CADDY_DOMAIN="aiportfolioanalysis-test.southcentralus.azurecontainer.io"
+          echo "Building for test environment"
+        fi
+        
+        # Generate Caddyfile from template
+        sed -e "s/__CADDY_DOMAIN__/$CADDY_DOMAIN/g" \
+            Caddyfile.template > Caddyfile
+        
+        echo "Generated Caddyfile for domain: $CADDY_DOMAIN"
+        echo "Caddyfile contents:"
+        cat Caddyfile
+
     - name: Build and push Caddy Docker image
       uses: docker/build-push-action@v5
       id: caddy-build
@@ -76,88 +101,3 @@ jobs:
         tags: ${{ steps.caddy-meta.outputs.tags }}
         labels: ${{ steps.caddy-meta.outputs.labels }}
 
-    - name: Run security scan on ASP.NET image (PR)
-      uses: aquasecurity/trivy-action@0.28.0
-      with:
-        image-ref: ${{ fromJSON(steps.aspnet-meta.outputs.json).tags[0] }}
-        format: 'sarif'
-        output: 'trivy-aspnet-results.sarif'
-      if: github.event_name == 'pull_request'
-
-    - name: Run security scan on Caddy image (PR)
-      uses: aquasecurity/trivy-action@0.28.0
-      with:
-        image-ref: ${{ fromJSON(steps.caddy-meta.outputs.json).tags[0] }}
-        format: 'sarif'
-        output: 'trivy-caddy-results.sarif'
-      if: github.event_name == 'pull_request'
-
-    - name: Run security scan on ASP.NET image (Push)
-      uses: aquasecurity/trivy-action@0.28.0
-      with:
-        image-ref: ${{ fromJSON(steps.aspnet-meta.outputs.json).tags[0] }}
-        format: 'sarif'
-        output: 'trivy-aspnet-results.sarif'
-      if: github.event_name != 'pull_request'
-
-    - name: Run security scan on Caddy image (Push)
-      uses: aquasecurity/trivy-action@0.28.0
-      with:
-        image-ref: ${{ fromJSON(steps.caddy-meta.outputs.json).tags[0] }}
-        format: 'sarif'
-        output: 'trivy-caddy-results.sarif'
-      if: github.event_name != 'pull_request'
-
-    - name: Upload ASP.NET Trivy scan results
-      uses: github/codeql-action/upload-sarif@v3
-      with:
-        sarif_file: 'trivy-aspnet-results.sarif'
-      continue-on-error: true
-      if: always() && hashFiles('trivy-aspnet-results.sarif') != ''
-
-    - name: Upload Caddy Trivy scan results
-      uses: github/codeql-action/upload-sarif@v3
-      with:
-        sarif_file: 'trivy-caddy-results.sarif'
-      continue-on-error: true
-      if: always() && hashFiles('trivy-caddy-results.sarif') != ''
-
-    - name: Archive security scan results
-      uses: actions/upload-artifact@v4
-      with:
-        name: trivy-security-scan-results
-        path: |
-          trivy-aspnet-results.sarif
-          trivy-caddy-results.sarif
-        retention-days: 30
-      if: always() && (hashFiles('trivy-aspnet-results.sarif') != '' || hashFiles('trivy-caddy-results.sarif') != '')
-
-    - name: Display security scan info
-      run: |
-        aspnet_scan_exists=false
-        caddy_scan_exists=false
-        
-        if [ -f "trivy-aspnet-results.sarif" ]; then
-          aspnet_scan_exists=true
-          echo "🔍 ASP.NET security scan completed successfully"
-          echo "📄 ASP.NET SARIF report: trivy-aspnet-results.sarif"
-        fi
-        
-        if [ -f "trivy-caddy-results.sarif" ]; then
-          caddy_scan_exists=true
-          echo "🔍 Caddy security scan completed successfully"
-          echo "📄 Caddy SARIF report: trivy-caddy-results.sarif"
-        fi
-        
-        if [ "$aspnet_scan_exists" = true ] || [ "$caddy_scan_exists" = true ]; then
-          echo ""
-          echo "📊 To enable automatic security alerts in GitHub:"
-          echo "1. Go to repository Settings → Security & analysis"
-          echo "2. Enable 'Code scanning alerts'"
-          echo "3. Security scan results will appear in the Security tab"
-          echo ""
-          echo "📁 Security scan results are available as build artifacts"
-        else
-          echo "❌ No security scans completed successfully"
-        fi
-      if: always()

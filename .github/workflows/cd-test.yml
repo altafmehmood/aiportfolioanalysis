@@ -2,11 +2,11 @@ name: CD Test - Deploy Feature Branches to Test Environment
 
 on:
   workflow_run:
-    workflows: ["CI - Build, Container Security & SARIF Upload"]
+    workflows: ["CI - Build"]
     types:
       - completed
-    branches: 
-      - 'feature/**'
+    branches-ignore:
+      - main
   workflow_dispatch:
     inputs:
       branch:
@@ -18,12 +18,51 @@ env:
   REGISTRY: ${{ secrets.ACR_REGISTRY }}
   ASPNET_IMAGE_NAME: aiportfolioanalysis
   CADDY_IMAGE_NAME: caddy-proxy
-  RESOURCE_GROUP: ${{ secrets.TEST_RESOURCE_GROUP }}
+  RESOURCE_GROUP: ${{ secrets.ACI_RESOURCE_GROUP }}
 
 jobs:
+  check-secrets:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Echo required secrets for test deployment
+      run: |
+        echo "🔍 Checking all required secrets for test deployment..."
+        echo "========================================="
+        
+        echo "Container Registry Secrets:"
+        echo "- ACR_REGISTRY: ${{ secrets.ACR_REGISTRY != '' && '✅ Set' || '❌ Missing' }}"
+        echo "- ACR_USERNAME: ${{ secrets.ACR_USERNAME != '' && '✅ Set' || '❌ Missing' }}"
+        echo "- ACR_PASSWORD: ${{ secrets.ACR_PASSWORD != '' && '✅ Set' || '❌ Missing' }}"
+        echo ""
+        
+        echo "Azure Authentication Secrets:"
+        echo "- AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID != '' && '✅ Set' || '❌ Missing' }}"
+        echo "- AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID != '' && '✅ Set' || '❌ Missing' }}"
+        echo "- AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID != '' && '✅ Set' || '❌ Missing' }}"
+        echo ""
+        
+        echo "Azure Container Instance Secrets:"
+        echo "- ACI_RESOURCE_GROUP: ${{ secrets.ACI_RESOURCE_GROUP != '' && '✅ Set' || '❌ Missing' }}"
+        echo ""
+        
+        echo "Google OAuth Secrets (Test Environment):"
+        echo "- GOOGLE_CLIENTID_TEST: ${{ secrets.GOOGLE_CLIENTID_TEST != '' && '✅ Set' || '⚠️ Missing (will fallback to GOOGLE_CLIENTID)' }}"
+        echo "- GOOGLE_CLIENTSECRET_TEST: ${{ secrets.GOOGLE_CLIENTSECRET_TEST != '' && '✅ Set' || '⚠️ Missing (will fallback to GOOGLE_CLIENTSECRET)' }}"
+        echo ""
+        
+        echo "Google OAuth Secrets (Fallback):"
+        echo "- GOOGLE_CLIENTID: ${{ secrets.GOOGLE_CLIENTID != '' && '✅ Set' || '❌ Missing' }}"
+        echo "- GOOGLE_CLIENTSECRET: ${{ secrets.GOOGLE_CLIENTSECRET != '' && '✅ Set' || '❌ Missing' }}"
+        echo ""
+        
+        
+        echo "========================================="
+        echo "ℹ️ Test environment will use *_TEST secrets if available, otherwise fallback to production secrets"
+
   deploy-test:
     runs-on: ubuntu-latest
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    needs: check-secrets
+    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
     environment: test
     permissions:
       contents: read
@@ -33,12 +72,54 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v4
 
+    - name: Validate required secrets
+      run: |
+        echo "🔍 Validating required secrets for test deployment..."
+        
+        MISSING_SECRETS=""
+        
+        if [ -z "${{ secrets.ACR_REGISTRY }}" ]; then
+          MISSING_SECRETS="$MISSING_SECRETS ACR_REGISTRY"
+        fi
+        
+        if [ -z "${{ secrets.ACI_RESOURCE_GROUP }}" ]; then
+          MISSING_SECRETS="$MISSING_SECRETS ACI_RESOURCE_GROUP"
+        fi
+        
+        if [ -z "${{ secrets.AZURE_CLIENT_ID }}" ]; then
+          MISSING_SECRETS="$MISSING_SECRETS AZURE_CLIENT_ID"
+        fi
+        
+        if [ -z "${{ secrets.AZURE_TENANT_ID }}" ]; then
+          MISSING_SECRETS="$MISSING_SECRETS AZURE_TENANT_ID"
+        fi
+        
+        if [ -z "${{ secrets.AZURE_SUBSCRIPTION_ID }}" ]; then
+          MISSING_SECRETS="$MISSING_SECRETS AZURE_SUBSCRIPTION_ID"
+        fi
+        
+        if [ -n "$MISSING_SECRETS" ]; then
+          echo "❌ Missing required secrets: $MISSING_SECRETS"
+          echo "Please configure these secrets in repository settings."
+          exit 1
+        fi
+        
+        echo "✅ All required secrets are configured"
+
     - name: Azure Login
       uses: azure/login@v2
       with:
         client-id: ${{ secrets.AZURE_CLIENT_ID }}
         tenant-id: ${{ secrets.AZURE_TENANT_ID }}
         subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+    - name: Verify Azure Authentication
+      run: |
+        echo "🔐 Verifying Azure authentication for test environment..."
+        echo "✅ Authenticated via OIDC"
+        
+        # Display Azure account information
+        az account show --query '{subscriptionId: id, tenantId: tenantId, name: name}' -o table
 
     - name: Extract branch name and set variables
       id: vars
@@ -66,6 +147,9 @@ jobs:
         # Clean branch name for DNS (remove feature/ prefix, replace special chars)
         CLEAN_BRANCH=$(echo "$BRANCH_NAME" | sed 's/^feature\///' | sed 's/[^a-zA-Z0-9-]/-/g' | tr '[:upper:]' '[:lower:]')
         
+        # Clean branch name for Docker tags (replace / and other special chars with -)
+        DOCKER_BRANCH=$(echo "$BRANCH_NAME" | sed 's/[^a-zA-Z0-9._-]/-/g' | tr '[:upper:]' '[:lower:]')
+        
         # Limit length for DNS compatibility (max 63 chars for DNS label)
         if [ ${#CLEAN_BRANCH} -gt 20 ]; then
           CLEAN_BRANCH="${CLEAN_BRANCH:0:20}"
@@ -76,10 +160,27 @@ jobs:
         # Set outputs
         echo "branch_name=$BRANCH_NAME" >> $GITHUB_OUTPUT
         echo "clean_branch=$CLEAN_BRANCH" >> $GITHUB_OUTPUT
-        echo "aci_name=test-$CLEAN_BRANCH" >> $GITHUB_OUTPUT
-        echo "dns_name=test-$CLEAN_BRANCH" >> $GITHUB_OUTPUT
-        echo "aspnet_image=${{ env.REGISTRY }}/${{ env.ASPNET_IMAGE_NAME }}:$BRANCH_NAME-$SHORT_SHA" >> $GITHUB_OUTPUT
-        echo "caddy_image=${{ env.REGISTRY }}/${{ env.CADDY_IMAGE_NAME }}:$BRANCH_NAME-$SHORT_SHA" >> $GITHUB_OUTPUT
+        echo "aci_name=aiportfolioanalysis-test" >> $GITHUB_OUTPUT
+        echo "dns_name=aiportfolioanalysis-test" >> $GITHUB_OUTPUT
+
+    - name: Get image tags
+      id: image
+      run: |
+        # Use the triggering workflow run number for semantic versioning
+        if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          # For manual dispatch, get the latest CI run number for this branch
+          RUN_NUMBER=$(gh run list --workflow="CI - Build" --branch="${{ steps.vars.outputs.branch_name }}" --limit=1 --json number --jq '.[0].number')
+          echo "Latest CI run number for branch ${{ steps.vars.outputs.branch_name }}: $RUN_NUMBER"
+        else
+          # Use the triggering workflow run number
+          RUN_NUMBER="${{ github.event.workflow_run.run_number }}"
+        fi
+        VERSION="0.1.$RUN_NUMBER"
+        echo "aspnet_image=${{ env.REGISTRY }}/${{ env.ASPNET_IMAGE_NAME }}:$VERSION" >> $GITHUB_OUTPUT
+        echo "caddy_image=${{ env.REGISTRY }}/${{ env.CADDY_IMAGE_NAME }}:$VERSION" >> $GITHUB_OUTPUT
+        echo "Using version: $VERSION"
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
     - name: Get container FQDN for environment variables
       id: container_url
@@ -110,17 +211,18 @@ jobs:
           containers:
           - name: caddy-proxy
             properties:
-              image: ${{ steps.vars.outputs.caddy_image }}
+              image: ${{ steps.image.outputs.caddy_image }}
               ports:
               - port: 80
               - port: 443
               resources:
                 requests:
-                  cpu: 0.05
-                  memoryInGb: 0.05
+                  cpu: 0.1
+                  memoryInGb: 0.1
+              environmentVariables: []
           - name: aspnet-backend
             properties:
-              image: ${{ steps.vars.outputs.aspnet_image }}
+              image: ${{ steps.image.outputs.aspnet_image }}
               ports:
               - port: 8080
               resources:
@@ -221,8 +323,8 @@ jobs:
         echo "- **Environment**: Test" >> $GITHUB_STEP_SUMMARY
         echo "- **Branch**: ${{ steps.vars.outputs.branch_name }}" >> $GITHUB_STEP_SUMMARY
         echo "- **Container**: $ACI_NAME" >> $GITHUB_STEP_SUMMARY
-        echo "- **ASP.NET Image**: ${{ steps.vars.outputs.aspnet_image }}" >> $GITHUB_STEP_SUMMARY
-        echo "- **Caddy Image**: ${{ steps.vars.outputs.caddy_image }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **ASP.NET Image**: ${{ steps.image.outputs.aspnet_image }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Caddy Image**: ${{ steps.image.outputs.caddy_image }}" >> $GITHUB_STEP_SUMMARY
         if [ "$FQDN" != "pending" ]; then
           echo "- **Test URL**: http://$FQDN" >> $GITHUB_STEP_SUMMARY
           echo "- **HTTPS URL**: https://$FQDN (SSL cert provisioning in progress)" >> $GITHUB_STEP_SUMMARY
