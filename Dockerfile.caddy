@@ -6,18 +6,17 @@ RUN mkdir -p /var/log/caddy /data /config
 # Copy Caddyfile template
 COPY Caddyfile.template /etc/caddy/Caddyfile.template
 
+# Copy startup script
+COPY caddy-startup.sh /etc/caddy/startup.sh
+
+# Make startup script executable
+RUN chmod +x /etc/caddy/startup.sh
+
 # Create non-root user
 RUN addgroup -g 1001 -S caddyuser && adduser -S caddyuser -G caddyuser
 
 # Set proper permissions
 RUN chown -R caddyuser:caddyuser /var/log/caddy /data /config /etc/caddy
-
-# Copy startup script
-COPY caddy-startup.sh /etc/caddy/startup.sh
-
-# Make startup script executable and set proper permissions
-RUN chmod +x /etc/caddy/startup.sh && \
-    chown caddyuser:caddyuser /etc/caddy/startup.sh
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
