@@ -55,9 +55,6 @@ jobs:
         echo "- GOOGLE_CLIENTSECRET: ${{ secrets.GOOGLE_CLIENTSECRET != '' && '✅ Set' || '❌ Missing' }}"
         echo ""
         
-        echo "SSL Certificate Secrets:"
-        echo "- LETS_ENCRYPT_EMAIL: ${{ secrets.LETS_ENCRYPT_EMAIL != '' && '✅ Set' || '❌ Missing' }}"
-        echo ""
         
         echo "========================================="
         echo "ℹ️ Test environment will use *_TEST secrets if available, otherwise fallback to production secrets"
@@ -209,11 +206,7 @@ jobs:
                 requests:
                   cpu: 0.1
                   memoryInGb: 0.1
-              environmentVariables:
-              - name: LETS_ENCRYPT_EMAIL
-                secureValue: ${{ secrets.LETS_ENCRYPT_EMAIL }}
-              - name: CADDY_DOMAIN
-                value: ${{ steps.container_url.outputs.fqdn }}
+              environmentVariables: []
           - name: aspnet-backend
             properties:
               image: ${{ steps.vars.outputs.aspnet_image }}

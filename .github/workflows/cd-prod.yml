@@ -46,9 +46,6 @@ jobs:
         echo "- GOOGLE_CLIENTSECRET: ${{ secrets.GOOGLE_CLIENTSECRET != '' && '✅ Set' || '❌ Missing' }}"
         echo ""
         
-        echo "SSL Certificate Secrets:"
-        echo "- LETS_ENCRYPT_EMAIL: ${{ secrets.LETS_ENCRYPT_EMAIL != '' && '✅ Set' || '❌ Missing' }}"
-        echo ""
         
         echo "========================================="
         echo "ℹ️ Production deployment requires all secrets to be properly configured"
@@ -163,9 +160,7 @@ jobs:
                 requests:
                   cpu: 0.1
                   memoryInGb: 0.1
-              environmentVariables:
-              - name: LETS_ENCRYPT_EMAIL
-                secureValue: ${{ secrets.LETS_ENCRYPT_EMAIL }}
+              environmentVariables: []
           - name: aspnet-backend
             properties:
               image: ${{ steps.image.outputs.aspnet_image }}

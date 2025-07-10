@@ -1,6 +1,6 @@
 # Global configuration
 {
-    email __LETS_ENCRYPT_EMAIL__
+    email admin@aiportfolioanalysis.com
 }
 
 # Environment-specific configuration

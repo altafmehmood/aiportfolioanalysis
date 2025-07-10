@@ -85,7 +85,6 @@ jobs:
         
         # Generate Caddyfile from template
         sed -e "s/__CADDY_DOMAIN__/$CADDY_DOMAIN/g" \
-            -e "s/__LETS_ENCRYPT_EMAIL__/{env.LETS_ENCRYPT_EMAIL}/g" \
             Caddyfile.template > Caddyfile
         
         echo "Generated Caddyfile for domain: $CADDY_DOMAIN"
