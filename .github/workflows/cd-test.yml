@@ -162,11 +162,15 @@ jobs:
         echo "clean_branch=$CLEAN_BRANCH" >> $GITHUB_OUTPUT
         echo "aci_name=aiportfolioanalysis-test" >> $GITHUB_OUTPUT
         echo "dns_name=aiportfolioanalysis-test" >> $GITHUB_OUTPUT
+
+    - name: Get image tags
+      id: image
+      run: |
         # Use the triggering workflow run number for semantic versioning
         if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
           # For manual dispatch, get the latest CI run number for this branch
-          RUN_NUMBER=$(gh run list --workflow="CI - Build" --branch="$BRANCH_NAME" --limit=1 --json number --jq '.[0].number')
-          echo "Latest CI run number for branch $BRANCH_NAME: $RUN_NUMBER"
+          RUN_NUMBER=$(gh run list --workflow="CI - Build" --branch="${{ steps.vars.outputs.branch_name }}" --limit=1 --json number --jq '.[0].number')
+          echo "Latest CI run number for branch ${{ steps.vars.outputs.branch_name }}: $RUN_NUMBER"
         else
           # Use the triggering workflow run number
           RUN_NUMBER="${{ github.event.workflow_run.run_number }}"
@@ -207,7 +211,7 @@ jobs:
           containers:
           - name: caddy-proxy
             properties:
-              image: ${{ steps.vars.outputs.caddy_image }}
+              image: ${{ steps.image.outputs.caddy_image }}
               ports:
               - port: 80
               - port: 443
@@ -218,7 +222,7 @@ jobs:
               environmentVariables: []
           - name: aspnet-backend
             properties:
-              image: ${{ steps.vars.outputs.aspnet_image }}
+              image: ${{ steps.image.outputs.aspnet_image }}
               ports:
               - port: 8080
               resources:
@@ -319,8 +323,8 @@ jobs:
         echo "- **Environment**: Test" >> $GITHUB_STEP_SUMMARY
         echo "- **Branch**: ${{ steps.vars.outputs.branch_name }}" >> $GITHUB_STEP_SUMMARY
         echo "- **Container**: $ACI_NAME" >> $GITHUB_STEP_SUMMARY
-        echo "- **ASP.NET Image**: ${{ steps.vars.outputs.aspnet_image }}" >> $GITHUB_STEP_SUMMARY
-        echo "- **Caddy Image**: ${{ steps.vars.outputs.caddy_image }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **ASP.NET Image**: ${{ steps.image.outputs.aspnet_image }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Caddy Image**: ${{ steps.image.outputs.caddy_image }}" >> $GITHUB_STEP_SUMMARY
         if [ "$FQDN" != "pending" ]; then
           echo "- **Test URL**: http://$FQDN" >> $GITHUB_STEP_SUMMARY
           echo "- **HTTPS URL**: https://$FQDN (SSL cert provisioning in progress)" >> $GITHUB_STEP_SUMMARY
