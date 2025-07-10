@@ -163,8 +163,17 @@ jobs:
         echo "aci_name=aiportfolioanalysis-test" >> $GITHUB_OUTPUT
         echo "dns_name=aiportfolioanalysis-test" >> $GITHUB_OUTPUT
         # Use the triggering workflow run number for semantic versioning
-        RUN_NUMBER="${{ github.event.workflow_run.run_number || github.run_number }}"
+        if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          # For manual dispatch, get the latest CI run number for this branch
+          RUN_NUMBER=$(gh run list --workflow="CI - Build" --branch="$BRANCH_NAME" --limit=1 --json number --jq '.[0].number')
+          echo "Latest CI run number for branch $BRANCH_NAME: $RUN_NUMBER"
+        else
+          # Use the triggering workflow run number
+          RUN_NUMBER="${{ github.event.workflow_run.run_number }}"
+        fi
         VERSION="0.1.$RUN_NUMBER"
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         echo "aspnet_image=${{ env.REGISTRY }}/${{ env.ASPNET_IMAGE_NAME }}:$VERSION" >> $GITHUB_OUTPUT
         echo "caddy_image=${{ env.REGISTRY }}/${{ env.CADDY_IMAGE_NAME }}:$VERSION" >> $GITHUB_OUTPUT
         echo "Using version: $VERSION"
