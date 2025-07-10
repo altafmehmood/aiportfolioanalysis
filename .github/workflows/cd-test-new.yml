@@ -1,0 +1,69 @@
+name: CD Test Deploy Feature Branches
+
+on:
+  workflow_run:
+    workflows: ["CI - Build"]
+    types:
+      - completed
+    branches-ignore:
+      - main
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: 'Branch to deploy'
+        required: false
+        default: 'feature/https-azure-container-groups'
+
+env:
+  REGISTRY: ${{ secrets.ACR_REGISTRY }}
+  ASPNET_IMAGE_NAME: aiportfolioanalysis
+  CADDY_IMAGE_NAME: caddy-proxy
+  RESOURCE_GROUP: ${{ secrets.ACI_RESOURCE_GROUP }}
+
+jobs:
+  deploy-test:
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
+    environment: test
+    permissions:
+      contents: read
+      id-token: write
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Azure Login
+      uses: azure/login@v2
+      with:
+        client-id: ${{ secrets.AZURE_CLIENT_ID }}
+        tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+        subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+    - name: Get image tags
+      id: image
+      run: |
+        # Use the triggering workflow run number for semantic versioning
+        if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          # For manual dispatch, get the latest CI run number for this branch
+          BRANCH_NAME="${{ github.event.inputs.branch || github.ref_name }}"
+          RUN_NUMBER=$(gh run list --workflow="CI - Build" --branch="$BRANCH_NAME" --limit=1 --json number --jq '.[0].number')
+          echo "Latest CI run number for branch $BRANCH_NAME: $RUN_NUMBER"
+        else
+          # Use the triggering workflow run number
+          RUN_NUMBER="${{ github.event.workflow_run.run_number }}"
+        fi
+        VERSION="0.1.$RUN_NUMBER"
+        echo "aspnet_image=${{ env.REGISTRY }}/${{ env.ASPNET_IMAGE_NAME }}:$VERSION" >> $GITHUB_OUTPUT
+        echo "caddy_image=${{ env.REGISTRY }}/${{ env.CADDY_IMAGE_NAME }}:$VERSION" >> $GITHUB_OUTPUT
+        echo "Using version: $VERSION"
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Test deployment
+      run: |
+        echo "🧪 Would deploy test environment with:"
+        echo "ASP.NET Image: ${{ steps.image.outputs.aspnet_image }}"
+        echo "Caddy Image: ${{ steps.image.outputs.caddy_image }}"
+        echo "Resource Group: ${{ env.RESOURCE_GROUP }}"
+        echo "✅ Test deployment simulation complete"
