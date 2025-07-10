@@ -33,16 +33,23 @@ jobs:
         username: ${{ secrets.ACR_USERNAME }}
         password: ${{ secrets.ACR_PASSWORD }}
 
+    - name: Generate semantic version
+      id: version
+      run: |
+        VERSION="0.1.${{ github.run_number }}"
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+        echo "Generated version: $VERSION"
+
     - name: Extract ASP.NET metadata
       id: aspnet-meta
       uses: docker/metadata-action@v5
       with:
         images: ${{ env.REGISTRY }}/${{ env.ASPNET_IMAGE_NAME }}
         tags: |
+          type=raw,value=${{ steps.version.outputs.version }}
+          type=raw,value=latest,enable={{is_default_branch}}
           type=ref,event=branch
           type=ref,event=pr
-          type=sha,format=short,prefix={{branch}}-
-          type=raw,value=latest,enable={{is_default_branch}}
 
     - name: Extract Caddy metadata
       id: caddy-meta
@@ -50,10 +57,10 @@ jobs:
       with:
         images: ${{ env.REGISTRY }}/${{ env.CADDY_IMAGE_NAME }}
         tags: |
+          type=raw,value=${{ steps.version.outputs.version }}
+          type=raw,value=latest,enable={{is_default_branch}}
           type=ref,event=branch
           type=ref,event=pr
-          type=sha,format=short,prefix={{branch}}-
-          type=raw,value=latest,enable={{is_default_branch}}
 
     - name: Build and push ASP.NET Docker image
       uses: docker/build-push-action@v5

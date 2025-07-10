@@ -122,9 +122,12 @@ jobs:
     - name: Get image tags
       id: image
       run: |
-        SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
-        echo "aspnet_image=${{ env.REGISTRY }}/${{ env.ASPNET_IMAGE_NAME }}:main-$SHORT_SHA" >> $GITHUB_OUTPUT
-        echo "caddy_image=${{ env.REGISTRY }}/${{ env.CADDY_IMAGE_NAME }}:main-$SHORT_SHA" >> $GITHUB_OUTPUT
+        # Use the triggering workflow run number for semantic versioning
+        RUN_NUMBER="${{ github.event.workflow_run.run_number }}"
+        VERSION="0.1.$RUN_NUMBER"
+        echo "aspnet_image=${{ env.REGISTRY }}/${{ env.ASPNET_IMAGE_NAME }}:$VERSION" >> $GITHUB_OUTPUT
+        echo "caddy_image=${{ env.REGISTRY }}/${{ env.CADDY_IMAGE_NAME }}:$VERSION" >> $GITHUB_OUTPUT
+        echo "Using version: $VERSION"
 
     - name: Get container FQDN for environment variables
       id: container_url

@@ -165,8 +165,12 @@ jobs:
         echo "clean_branch=$CLEAN_BRANCH" >> $GITHUB_OUTPUT
         echo "aci_name=aiportfolioanalysis-test" >> $GITHUB_OUTPUT
         echo "dns_name=aiportfolioanalysis-test" >> $GITHUB_OUTPUT
-        echo "aspnet_image=${{ env.REGISTRY }}/${{ env.ASPNET_IMAGE_NAME }}:$DOCKER_BRANCH-$SHORT_SHA" >> $GITHUB_OUTPUT
-        echo "caddy_image=${{ env.REGISTRY }}/${{ env.CADDY_IMAGE_NAME }}:$DOCKER_BRANCH-$SHORT_SHA" >> $GITHUB_OUTPUT
+        # Use the triggering workflow run number for semantic versioning
+        RUN_NUMBER="${{ github.event.workflow_run.run_number || github.run_number }}"
+        VERSION="0.1.$RUN_NUMBER"
+        echo "aspnet_image=${{ env.REGISTRY }}/${{ env.ASPNET_IMAGE_NAME }}:$VERSION" >> $GITHUB_OUTPUT
+        echo "caddy_image=${{ env.REGISTRY }}/${{ env.CADDY_IMAGE_NAME }}:$VERSION" >> $GITHUB_OUTPUT
+        echo "Using version: $VERSION"
 
     - name: Get container FQDN for environment variables
       id: container_url
