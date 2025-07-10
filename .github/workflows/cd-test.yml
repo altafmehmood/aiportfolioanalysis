@@ -172,11 +172,11 @@ jobs:
           RUN_NUMBER="${{ github.event.workflow_run.run_number }}"
         fi
         VERSION="0.1.$RUN_NUMBER"
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         echo "aspnet_image=${{ env.REGISTRY }}/${{ env.ASPNET_IMAGE_NAME }}:$VERSION" >> $GITHUB_OUTPUT
         echo "caddy_image=${{ env.REGISTRY }}/${{ env.CADDY_IMAGE_NAME }}:$VERSION" >> $GITHUB_OUTPUT
         echo "Using version: $VERSION"
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
     - name: Get container FQDN for environment variables
       id: container_url
