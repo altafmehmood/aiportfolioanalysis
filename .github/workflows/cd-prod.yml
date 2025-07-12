@@ -160,7 +160,9 @@ jobs:
                 requests:
                   cpu: 0.1
                   memoryInGb: 0.1
-              environmentVariables: []
+              environmentVariables:
+              - name: CADDY_DOMAIN
+                value: ${{ steps.container_url.outputs.fqdn }}
           - name: aspnet-backend
             properties:
               image: ${{ steps.image.outputs.aspnet_image }}
