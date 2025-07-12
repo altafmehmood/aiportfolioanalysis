@@ -1,5 +1,6 @@
 #!/bin/sh
 echo "=== Caddy startup script starting ==="
+echo "Version: 1.1 - Fixed template processing"
 
 echo "Current user: $(whoami)"
 echo "Current directory: $(pwd)"
