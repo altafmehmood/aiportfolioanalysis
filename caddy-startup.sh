@@ -12,7 +12,7 @@ which caddy || echo "caddy not found in PATH"
 caddy version || echo "caddy version failed"
 
 echo "Environment variables:"
-env | sort
+env
 
 # Get domain from environment or use default
 CADDY_DOMAIN="${CADDY_DOMAIN:-localhost}"
