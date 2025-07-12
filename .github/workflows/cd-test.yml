@@ -203,6 +203,7 @@ jobs:
         fi
 
         # Create container group YAML configuration
+        CADDY_DOMAIN="$DNS_NAME.southcentralus.azurecontainer.io"
         cat > container-group.yaml <<EOF
         apiVersion: 2021-10-01
         location: South Central US
@@ -221,7 +222,7 @@ jobs:
                   memoryInGb: 0.1
               environmentVariables:
               - name: CADDY_DOMAIN
-                value: ${{ steps.container_url.outputs.fqdn }}
+                value: $CADDY_DOMAIN
           - name: aspnet-backend
             properties:
               image: ${{ steps.image.outputs.aspnet_image }}
