@@ -202,17 +202,24 @@ jobs:
           sleep 20
         fi
 
-        # Create container group YAML configuration
-        echo "Creating YAML with CADDY_DOMAIN: ${DNS_NAME}.southcentralus.azurecontainer.io"
-        cat > container-group.yaml << 'EOF'
+        # Set environment variables
+        GOOGLE_CLIENT_ID="${{ secrets.GOOGLE_CLIENTID_TEST != '' && secrets.GOOGLE_CLIENTID_TEST || secrets.GOOGLE_CLIENTID }}"
+        GOOGLE_CLIENT_SECRET="${{ secrets.GOOGLE_CLIENTSECRET_TEST != '' && secrets.GOOGLE_CLIENTSECRET_TEST || secrets.GOOGLE_CLIENTSECRET }}"
+        CADDY_DOMAIN_VALUE="${DNS_NAME}.southcentralus.azurecontainer.io"
+        FRONTEND_URL_VALUE="https://${DNS_NAME}.southcentralus.azurecontainer.io"
+        
+        echo "Creating YAML with CADDY_DOMAIN: $CADDY_DOMAIN_VALUE"
+        
+        # Create container group YAML configuration using direct variable expansion
+        cat > container-group.yaml <<EOF
         apiVersion: 2021-10-01
         location: South Central US
-        name: PLACEHOLDER_ACI_NAME
+        name: $ACI_NAME
         properties:
           containers:
           - name: caddy-proxy
             properties:
-              image: PLACEHOLDER_CADDY_IMAGE
+              image: ${{ steps.image.outputs.caddy_image }}
               ports:
               - port: 80
               - port: 443
@@ -222,10 +229,10 @@ jobs:
                   memoryInGb: 0.1
               environmentVariables:
               - name: CADDY_DOMAIN
-                value: PLACEHOLDER_CADDY_DOMAIN
+                value: $CADDY_DOMAIN_VALUE
           - name: aspnet-backend
             properties:
-              image: PLACEHOLDER_ASPNET_IMAGE
+              image: ${{ steps.image.outputs.aspnet_image }}
               ports:
               - port: 8080
               resources:
@@ -238,38 +245,25 @@ jobs:
               - name: ASPNETCORE_URLS
                 value: http://+:8080
               - name: Authentication__Google__ClientId
-                secureValue: PLACEHOLDER_GOOGLE_CLIENTID
+                secureValue: $GOOGLE_CLIENT_ID
               - name: Authentication__Google__ClientSecret
-                secureValue: PLACEHOLDER_GOOGLE_CLIENTSECRET
+                secureValue: $GOOGLE_CLIENT_SECRET
               - name: Frontend__BaseUrl
-                value: PLACEHOLDER_FRONTEND_URL
+                value: $FRONTEND_URL_VALUE
           ipAddress:
             type: Public
             ports:
             - port: 80
             - port: 443
-            dnsNameLabel: PLACEHOLDER_DNS_NAME
+            dnsNameLabel: $DNS_NAME
           osType: Linux
           restartPolicy: Always
           imageRegistryCredentials:
-          - server: PLACEHOLDER_REGISTRY
-            username: PLACEHOLDER_USERNAME
-            password: PLACEHOLDER_PASSWORD
+          - server: ${{ env.REGISTRY }}
+            username: ${{ secrets.ACR_USERNAME }}
+            password: ${{ secrets.ACR_PASSWORD }}
         type: Microsoft.ContainerInstance/containerGroups
         EOF
-        
-        # Replace placeholders
-        sed -i "s|PLACEHOLDER_ACI_NAME|$ACI_NAME|g" container-group.yaml
-        sed -i "s|PLACEHOLDER_CADDY_IMAGE|${{ steps.image.outputs.caddy_image }}|g" container-group.yaml
-        sed -i "s|PLACEHOLDER_CADDY_DOMAIN|${DNS_NAME}.southcentralus.azurecontainer.io|g" container-group.yaml
-        sed -i "s|PLACEHOLDER_ASPNET_IMAGE|${{ steps.image.outputs.aspnet_image }}|g" container-group.yaml
-        sed -i "s|PLACEHOLDER_GOOGLE_CLIENTID|${{ secrets.GOOGLE_CLIENTID_TEST != '' && secrets.GOOGLE_CLIENTID_TEST || secrets.GOOGLE_CLIENTID }}|g" container-group.yaml
-        sed -i "s|PLACEHOLDER_GOOGLE_CLIENTSECRET|${{ secrets.GOOGLE_CLIENTSECRET_TEST != '' && secrets.GOOGLE_CLIENTSECRET_TEST || secrets.GOOGLE_CLIENTSECRET }}|g" container-group.yaml
-        sed -i "s|PLACEHOLDER_FRONTEND_URL|https://${DNS_NAME}.southcentralus.azurecontainer.io|g" container-group.yaml
-        sed -i "s|PLACEHOLDER_DNS_NAME|$DNS_NAME|g" container-group.yaml
-        sed -i "s|PLACEHOLDER_REGISTRY|${{ env.REGISTRY }}|g" container-group.yaml
-        sed -i "s|PLACEHOLDER_USERNAME|${{ secrets.ACR_USERNAME }}|g" container-group.yaml
-        sed -i "s|PLACEHOLDER_PASSWORD|${{ secrets.ACR_PASSWORD }}|g" container-group.yaml
 
         # Deploy container group
         echo "Deploying test environment: $ACI_NAME"
