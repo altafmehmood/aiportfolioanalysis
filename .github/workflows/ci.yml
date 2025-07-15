@@ -72,12 +72,12 @@ jobs:
         tags: ${{ steps.aspnet-meta.outputs.tags }}
         labels: ${{ steps.aspnet-meta.outputs.labels }}
 
-    - name: Build and push Caddy Docker image (minimal)
+    - name: Build and push Caddy Docker image (ultra-minimal)
       uses: docker/build-push-action@v5
       id: caddy-build
       with:
         context: .
-        file: ./Dockerfile.caddy.minimal
+        file: ./Dockerfile.caddy.ultra
         push: ${{ github.event_name != 'pull_request' }}
         tags: ${{ steps.caddy-meta.outputs.tags }}
         labels: ${{ steps.caddy-meta.outputs.labels }}

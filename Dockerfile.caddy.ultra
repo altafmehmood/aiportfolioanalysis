@@ -1,0 +1,7 @@
+FROM caddy:2.8-alpine
+
+# Copy just the config file
+COPY Caddyfile.minimal /etc/caddy/Caddyfile
+
+# That's it - use default caddy command
+EXPOSE 80 443
