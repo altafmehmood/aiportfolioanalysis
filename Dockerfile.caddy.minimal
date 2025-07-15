@@ -13,7 +13,8 @@ COPY caddy-startup-minimal.sh /etc/caddy/startup.sh
 # Make startup script executable
 RUN chmod +x /etc/caddy/startup.sh
 
-# Set proper permissions
+# Create caddy user and set proper permissions
+RUN addgroup -g 1000 -S caddy && adduser -u 1000 -S caddy -G caddy
 RUN chown -R caddy:caddy /var/log/caddy /data /config /etc/caddy
 
 # Simple health check
