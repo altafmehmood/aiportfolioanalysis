@@ -72,31 +72,12 @@ jobs:
         tags: ${{ steps.aspnet-meta.outputs.tags }}
         labels: ${{ steps.aspnet-meta.outputs.labels }}
 
-    - name: Generate Caddyfile for environment
-      run: |
-        # Determine environment based on branch
-        if [ "${{ github.ref_name }}" = "main" ]; then
-          CADDY_DOMAIN="aiportfolioanalysis-prod.southcentralus.azurecontainer.io"
-          echo "Building for production environment"
-        else
-          CADDY_DOMAIN="aiportfolioanalysis-test.southcentralus.azurecontainer.io"
-          echo "Building for test environment"
-        fi
-        
-        # Generate Caddyfile from template
-        sed -e "s/__CADDY_DOMAIN__/$CADDY_DOMAIN/g" \
-            Caddyfile.template > Caddyfile
-        
-        echo "Generated Caddyfile for domain: $CADDY_DOMAIN"
-        echo "Caddyfile contents:"
-        cat Caddyfile
-
-    - name: Build and push Caddy Docker image
+    - name: Build and push Caddy Docker image (minimal)
       uses: docker/build-push-action@v5
       id: caddy-build
       with:
         context: .
-        file: ./Dockerfile.caddy
+        file: ./Dockerfile.caddy.minimal
         push: ${{ github.event_name != 'pull_request' }}
         tags: ${{ steps.caddy-meta.outputs.tags }}
         labels: ${{ steps.caddy-meta.outputs.labels }}

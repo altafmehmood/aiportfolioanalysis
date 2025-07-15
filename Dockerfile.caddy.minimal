@@ -1,0 +1,30 @@
+FROM caddy:2.8-alpine
+
+# Install debugging tools
+RUN apk add --no-cache curl wget
+
+# Create directories
+RUN mkdir -p /var/log/caddy /data /config
+
+# Copy minimal configuration files
+COPY Caddyfile.minimal /etc/caddy/Caddyfile.minimal
+COPY caddy-startup-minimal.sh /etc/caddy/startup.sh
+
+# Make startup script executable
+RUN chmod +x /etc/caddy/startup.sh
+
+# Set proper permissions
+RUN chown -R caddy:caddy /var/log/caddy /data /config /etc/caddy
+
+# Simple health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+    CMD wget --no-verbose --tries=1 --spider http://localhost:80/health || exit 1
+
+# Use caddy user
+USER caddy
+
+# Expose ports
+EXPOSE 80 443
+
+# Use minimal startup script
+CMD ["/etc/caddy/startup.sh"]
