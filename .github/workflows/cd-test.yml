@@ -237,7 +237,7 @@ jobs:
                   memoryInGb: 0.1
               environmentVariables:
               - name: ASPNETCORE_ENVIRONMENT
-                value: Development
+                value: Production
               - name: ASPNETCORE_URLS
                 value: http://+:8080
               - name: Authentication__Google__ClientId
