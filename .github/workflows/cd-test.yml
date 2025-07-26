@@ -228,7 +228,7 @@ jobs:
                   memoryInGb: 0.1
               environmentVariables:
               - name: CADDY_DOMAIN
-                value: ${DNS_NAME}.southcentralus.azurecontainer.io
+                value: $DNS_NAME.southcentralus.azurecontainer.io
           - name: aspnet-backend
             properties:
               image: ${{ steps.image.outputs.aspnet_image }}
