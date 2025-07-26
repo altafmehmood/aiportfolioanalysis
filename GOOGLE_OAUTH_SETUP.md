@@ -85,6 +85,14 @@ export Authentication__Google__ClientSecret="YOUR_ACTUAL_GOOGLE_CLIENT_SECRET"
    https://aiportfolioanalysis.southcentralus.azurecontainer.io/signin-google
    ```
 
+   **⚠️ CRITICAL: Make sure you have ONLY the HTTPS redirect URI configured in Google Cloud Console. Remove any HTTP or port-specific redirect URIs like:**
+   - ❌ `http://aiportfolioanalysis.southcentralus.azurecontainer.io:8080/signin-google`
+   - ❌ `http://aiportfolioanalysis.southcentralus.azurecontainer.io:8080/api/auth/login`
+   - ❌ Any URLs with port numbers or HTTP protocol
+
+   **✅ The correct redirect URI should be:**
+   - `https://aiportfolioanalysis.southcentralus.azurecontainer.io/signin-google`
+
 #### Azure Container Instance Environment Variables:
 ```bash
 GOOGLE_CLIENTID=YOUR_PRODUCTION_CLIENT_ID
@@ -124,6 +132,148 @@ GOOGLE_CLIENTSECRET=YOUR_PRODUCTION_CLIENT_SECRET
 - Ensure HTTPS is enabled in production
 - Review and configure the OAuth consent screen appropriately
 - Consider implementing proper session timeout and security headers
+
+## Troubleshooting OAuth Redirect Issues
+
+### Common Problem: Wrong Redirect URL Format
+
+**Symptom:** Google redirects to URLs like:
+- `http://aiportfolioanalysis.southcentralus.azurecontainer.io:8080/api/auth/login`
+- URLs with HTTP instead of HTTPS
+- URLs with port numbers exposed
+
+**Solution:**
+1. **Check Google Cloud Console:**
+   - Go to [Google Cloud Console](https://console.cloud.google.com/)
+   - Navigate to "APIs & Services" > "Credentials"
+   - Edit your OAuth 2.0 Client ID
+   - In "Authorized redirect URIs", ensure you have ONLY:
+     ```
+     https://aiportfolioanalysis.southcentralus.azurecontainer.io/signin-google
+     ```
+   - Remove any HTTP or port-specific URIs
+
+2. **Verify Forwarded Headers:**
+   Check application logs to ensure forwarded headers are working:
+   ```bash
+   # Check container logs
+   az container logs --resource-group <your-resource-group> --name <container-group-name>
+   ```
+   
+   Look for log entries showing the forwarded headers configuration.
+
+3. **Test HTTPS Access:**
+   ```bash
+   curl -I https://aiportfolioanalysis.southcentralus.azurecontainer.io/api/auth/login
+   ```
+   Should return a redirect to Google OAuth, not an error.
+
+### Environment Variables Verification
+
+Ensure these environment variables are set correctly in production:
+```bash
+ASPNETCORE_ENVIRONMENT=Production
+ASPNETCORE_FORWARDEDHEADERS_ENABLED=true
+Frontend__BaseUrl=https://aiportfolioanalysis.southcentralus.azurecontainer.io
+```
+
+## Manual Deployment Configuration
+
+### ⚠️ **Critical: Set OAuth Environment Variables**
+
+Before running any manual deployment, you MUST set your Google OAuth credentials:
+
+```bash
+# Set your Google OAuth credentials (replace with your actual values)
+export GOOGLE_CLIENTID="your-actual-google-client-id.googleusercontent.com"
+export GOOGLE_CLIENTSECRET="your-actual-google-client-secret"
+
+# Verify they're set correctly
+echo "GOOGLE_CLIENTID: ${GOOGLE_CLIENTID}"
+echo "GOOGLE_CLIENTSECRET: ${GOOGLE_CLIENTSECRET}"
+```
+
+**⚠️ Important:** 
+- Never commit these values to git
+- Use your actual Google OAuth Client ID and Secret from Google Cloud Console
+- These environment variables are required for the deployment script to work
+
+### Deployment Commands
+
+```bash
+# Set OAuth credentials first
+export GOOGLE_CLIENTID="your-client-id"
+export GOOGLE_CLIENTSECRET="your-client-secret"
+
+# Run deployment
+./deploy-aci.sh
+```
+
+### Alternative: Use .env File (NOT committed to git)
+
+Create a `.env` file in your project root (add to .gitignore):
+
+```bash
+# .env file (DO NOT COMMIT TO GIT)
+GOOGLE_CLIENTID=your-actual-client-id
+GOOGLE_CLIENTSECRET=your-actual-client-secret
+```
+
+Then source it before deployment:
+```bash
+source .env
+./deploy-aci.sh
+```
+
+## Manual Verification Checklist
+
+### ✅ **Step 1: Check Your Current Deployment**
+Your current deployment FQDN is: `aiportfolioanalysis-test.southcentralus.azurecontainer.io`
+
+**Important:** Make sure your Google Cloud Console is configured for the correct domain!
+
+### ✅ **Step 2: Update Google Cloud Console (If Needed)**
+Since your actual FQDN is `aiportfolioanalysis-test.southcentralus.azurecontainer.io`, update your Google OAuth settings:
+
+1. Go to [Google Cloud Console](https://console.cloud.google.com/)
+2. Navigate to "APIs & Services" > "Credentials"
+3. Edit your OAuth 2.0 Client ID
+4. **Authorized JavaScript Origins:**
+   ```
+   https://aiportfolioanalysis-test.southcentralus.azurecontainer.io
+   ```
+5. **Authorized Redirect URIs:**
+   ```
+   https://aiportfolioanalysis-test.southcentralus.azurecontainer.io/signin-google
+   ```
+
+### ✅ **Step 3: Test the OAuth Flow**
+1. Open your browser and navigate to:
+   ```
+   https://aiportfolioanalysis-test.southcentralus.azurecontainer.io/api/auth/login
+   ```
+
+2. **Expected Behavior:**
+   - You should be redirected to Google's OAuth consent screen
+   - The URL should contain `accounts.google.com` 
+   - After authentication, you should be redirected back to your app
+
+3. **Check the Network Tab:**
+   - Open Developer Tools (F12)
+   - Go to Network tab
+   - Visit the login URL
+   - Look for a 302 redirect to `accounts.google.com`
+
+### ✅ **Step 4: Verify the Redirect URI**
+When you're on Google's OAuth page, check the URL parameters:
+- Look for `redirect_uri` parameter
+- It should be: `https://aiportfolioanalysis-test.southcentralus.azurecontainer.io/signin-google`
+- ❌ If you see HTTP or port 8080, your Google config needs updating
+
+### ✅ **Step 5: Test the Complete Flow**
+1. Complete the Google OAuth login
+2. Verify you're redirected back to your dashboard
+3. Check that you're properly authenticated
 
 ## Troubleshooting
 
