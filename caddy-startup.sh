@@ -1,6 +1,6 @@
 #!/bin/sh
 echo "=== Caddy startup script starting ==="
-echo "Version: 1.1 - Fixed template processing"
+echo "Version: 1.2 - Added environment-specific template selection"
 
 echo "Current user: $(whoami)"
 echo "Current directory: $(pwd)"
@@ -18,13 +18,26 @@ env
 CADDY_DOMAIN="${CADDY_DOMAIN:-localhost}"
 echo "Using domain: $CADDY_DOMAIN"
 
+# Determine which template to use based on environment
+# Check if we're in Docker Compose (aspnet-backend hostname resolves) or Azure (localhost)
+TEMPLATE_FILE="/etc/caddy/Caddyfile.template"
+if nslookup aspnet-backend >/dev/null 2>&1; then
+    echo "Docker Compose environment detected (aspnet-backend resolves)"
+    TEMPLATE_FILE="/etc/caddy/Caddyfile.docker-compose"
+else
+    echo "Azure Container Instance environment detected (using localhost)"
+    TEMPLATE_FILE="/etc/caddy/Caddyfile.template"
+fi
+
+echo "Using template: $TEMPLATE_FILE"
+
 # Process Caddyfile template
 echo "Processing Caddyfile template..."
-if [ -f "/etc/caddy/Caddyfile.template" ]; then
+if [ -f "$TEMPLATE_FILE" ]; then
     echo "Template found, processing with domain: $CADDY_DOMAIN"
     
     # Create the base configuration
-    sed "s/__CADDY_DOMAIN__/$CADDY_DOMAIN/g" /etc/caddy/Caddyfile.template > /etc/caddy/Caddyfile
+    sed "s/__CADDY_DOMAIN__/$CADDY_DOMAIN/g" "$TEMPLATE_FILE" > /etc/caddy/Caddyfile
     
     # If domain is localhost, remove the HTTP redirect section to avoid conflicts
     if [ "$CADDY_DOMAIN" = "localhost" ]; then
@@ -40,9 +53,16 @@ elif [ -f "/etc/caddy/Caddyfile" ]; then
     cat /etc/caddy/Caddyfile
 else
     echo "No template or Caddyfile found, creating minimal fallback..."
+    # Determine backend target based on environment
+    if nslookup aspnet-backend >/dev/null 2>&1; then
+        BACKEND_TARGET="aspnet-backend:8080"
+    else
+        BACKEND_TARGET="localhost:8080"
+    fi
+    
     cat > /etc/caddy/Caddyfile << EOF
 :80 {
-    reverse_proxy aspnet-backend:8080 {
+    reverse_proxy $BACKEND_TARGET {
         header_up Host {host}
         header_up X-Real-IP {remote_host}
         header_up X-Forwarded-For {remote_host}
@@ -52,7 +72,7 @@ else
     encode gzip zstd
 }
 EOF
-    echo "Fallback Caddyfile created. Contents:"
+    echo "Fallback Caddyfile created with backend: $BACKEND_TARGET. Contents:"
     cat /etc/caddy/Caddyfile
 fi
 

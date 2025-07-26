@@ -3,10 +3,10 @@
     email admin@aiportfolioanalysis.com
 }
 
-# Main site configuration
+# Main site configuration for Docker Compose
 __CADDY_DOMAIN__ {
-    # Simple reverse proxy to ASP.NET - use localhost for Azure Container Instances
-    reverse_proxy localhost:8080 {
+    # Simple reverse proxy to ASP.NET - use container name for Docker Compose
+    reverse_proxy aspnet-backend:8080 {
         header_up Host {host}
         header_up X-Real-IP {remote_host}
         header_up X-Forwarded-For {remote_host}

@@ -6,8 +6,9 @@ RUN apk add --no-cache curl wget
 # Create directories for logs and data
 RUN mkdir -p /var/log/caddy /data /config
 
-# Copy Caddyfile template
+# Copy Caddyfile templates
 COPY Caddyfile.template /etc/caddy/Caddyfile.template
+COPY Caddyfile.docker-compose /etc/caddy/Caddyfile.docker-compose
 
 # Copy startup script
 COPY caddy-startup.sh /etc/caddy/startup.sh

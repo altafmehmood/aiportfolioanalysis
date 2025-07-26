@@ -99,6 +99,9 @@ properties:
         requests:
           cpu: $CADDY_CPU
           memoryInGb: $CADDY_MEMORY
+      environmentVariables:
+      - name: CADDY_DOMAIN
+        value: $DNS_NAME.southcentralus.azurecontainer.io
   - name: aspnet-backend
     properties:
       image: $ASPNET_IMAGE

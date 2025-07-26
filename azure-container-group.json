@@ -78,7 +78,12 @@
                   "port": 2019
                 }
               ],
-              "environmentVariables": [],
+              "environmentVariables": [
+                {
+                  "name": "CADDY_DOMAIN",
+                  "value": "[concat(parameters('dnsNameLabel'), '.southcentralus.azurecontainer.io')]"
+                }
+              ],
               "resources": {
                 "requests": {
                   "memoryInGB": 0.5,
