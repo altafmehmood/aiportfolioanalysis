@@ -3,7 +3,7 @@
     email admin@aiportfolioanalysis.com
 }
 
-# Environment-specific configuration
+# Main site configuration
 __CADDY_DOMAIN__ {
     # Simple reverse proxy to ASP.NET - let it handle all routing
     reverse_proxy aspnet-backend:8080 {
@@ -29,20 +29,7 @@ __CADDY_DOMAIN__ {
     }
 }
 
-# Development/localhost configuration
-localhost {
-    reverse_proxy aspnet-backend:8080 {
-        header_up Host {host}
-        header_up X-Real-IP {remote_host}
-        header_up X-Forwarded-For {remote_host}
-        header_up X-Forwarded-Proto {scheme}
-        header_up X-Forwarded-Host {host}
-    }
-    
-    encode gzip zstd
-}
-
-# HTTP to HTTPS redirect
+# HTTP to HTTPS redirect (only for non-localhost domains)
 http://__CADDY_DOMAIN__ {
     redir https://{host}{uri} permanent
 } 

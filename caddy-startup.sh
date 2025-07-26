@@ -22,7 +22,17 @@ echo "Using domain: $CADDY_DOMAIN"
 echo "Processing Caddyfile template..."
 if [ -f "/etc/caddy/Caddyfile.template" ]; then
     echo "Template found, processing with domain: $CADDY_DOMAIN"
+    
+    # Create the base configuration
     sed "s/__CADDY_DOMAIN__/$CADDY_DOMAIN/g" /etc/caddy/Caddyfile.template > /etc/caddy/Caddyfile
+    
+    # If domain is localhost, remove the HTTP redirect section to avoid conflicts
+    if [ "$CADDY_DOMAIN" = "localhost" ]; then
+        echo "Localhost detected, removing HTTP redirect section..."
+        # Remove the HTTP redirect block for localhost
+        sed -i '/# HTTP to HTTPS redirect/,$d' /etc/caddy/Caddyfile
+    fi
+    
     echo "Caddyfile generated from template. Contents:"
     cat /etc/caddy/Caddyfile
 elif [ -f "/etc/caddy/Caddyfile" ]; then
