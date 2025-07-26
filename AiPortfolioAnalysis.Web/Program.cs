@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Http.Extensions;
 using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 using System.Collections;
 using System.Security.Claims;
 using System.Text.Json;
@@ -134,7 +135,8 @@ try
     builder.Services.AddAuthorization();
     
     startupLogger.LogInformation("🏥 Adding health check services");
-    builder.Services.AddHealthChecks();
+    builder.Services.AddHealthChecks()
+        .AddCheck("self", () => HealthCheckResult.Healthy("Application is running"));
 
     // Get frontend URL configuration
     startupLogger.LogInformation("🌐 Configuring frontend URL and CORS...");
