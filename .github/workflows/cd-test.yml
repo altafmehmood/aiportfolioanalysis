@@ -250,6 +250,8 @@ jobs:
                 secureValue: $GOOGLE_CLIENT_SECRET
               - name: Frontend__BaseUrl
                 value: $FRONTEND_URL_VALUE
+              - name: ASPNETCORE_FORWARDEDHEADERS_ENABLED
+                value: "true"
           ipAddress:
             type: Public
             ports:
