@@ -143,6 +143,12 @@ jobs:
           sleep 30
         fi
 
+        # Set environment variables for production
+        CADDY_DOMAIN_VALUE="${{ env.DNS_NAME }}.southcentralus.azurecontainer.io"
+        FRONTEND_URL_VALUE="https://${{ env.DNS_NAME }}.southcentralus.azurecontainer.io"
+        
+        echo "Creating YAML with CADDY_DOMAIN: $CADDY_DOMAIN_VALUE"
+        
         # Create container group YAML configuration
         cat > container-group.yaml <<EOF
         apiVersion: 2021-10-01
@@ -160,7 +166,9 @@ jobs:
                 requests:
                   cpu: 0.1
                   memoryInGb: 0.1
-              environmentVariables: []
+              environmentVariables:
+              - name: CADDY_DOMAIN
+                value: $CADDY_DOMAIN_VALUE
           - name: aspnet-backend
             properties:
               image: ${{ steps.image.outputs.aspnet_image }}
@@ -180,7 +188,7 @@ jobs:
               - name: Authentication__Google__ClientSecret
                 secureValue: ${{ secrets.GOOGLE_CLIENTSECRET }}
               - name: Frontend__BaseUrl
-                value: ${{ steps.container_url.outputs.frontend_url }}
+                value: $FRONTEND_URL_VALUE
           ipAddress:
             type: Public
             ports:

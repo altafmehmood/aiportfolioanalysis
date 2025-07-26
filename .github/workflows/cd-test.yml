@@ -202,7 +202,15 @@ jobs:
           sleep 20
         fi
 
-        # Create container group YAML configuration
+        # Set environment variables
+        GOOGLE_CLIENT_ID="${{ secrets.GOOGLE_CLIENTID_TEST != '' && secrets.GOOGLE_CLIENTID_TEST || secrets.GOOGLE_CLIENTID }}"
+        GOOGLE_CLIENT_SECRET="${{ secrets.GOOGLE_CLIENTSECRET_TEST != '' && secrets.GOOGLE_CLIENTSECRET_TEST || secrets.GOOGLE_CLIENTSECRET }}"
+        CADDY_DOMAIN_VALUE="${DNS_NAME}.southcentralus.azurecontainer.io"
+        FRONTEND_URL_VALUE="https://${DNS_NAME}.southcentralus.azurecontainer.io"
+        
+        echo "Creating container configuration with CADDY_DOMAIN: $CADDY_DOMAIN_VALUE"
+        
+        # Create container group YAML configuration - minimal approach
         cat > container-group.yaml <<EOF
         apiVersion: 2021-10-01
         location: South Central US
@@ -219,7 +227,9 @@ jobs:
                 requests:
                   cpu: 0.1
                   memoryInGb: 0.1
-              environmentVariables: []
+              environmentVariables:
+              - name: CADDY_DOMAIN
+                value: $CADDY_DOMAIN_VALUE
           - name: aspnet-backend
             properties:
               image: ${{ steps.image.outputs.aspnet_image }}
@@ -231,15 +241,15 @@ jobs:
                   memoryInGb: 0.1
               environmentVariables:
               - name: ASPNETCORE_ENVIRONMENT
-                value: Development
+                value: Production
               - name: ASPNETCORE_URLS
                 value: http://+:8080
               - name: Authentication__Google__ClientId
-                secureValue: ${{ secrets.GOOGLE_CLIENTID_TEST != '' && secrets.GOOGLE_CLIENTID_TEST || secrets.GOOGLE_CLIENTID }}
+                secureValue: $GOOGLE_CLIENT_ID
               - name: Authentication__Google__ClientSecret
-                secureValue: ${{ secrets.GOOGLE_CLIENTSECRET_TEST != '' && secrets.GOOGLE_CLIENTSECRET_TEST || secrets.GOOGLE_CLIENTSECRET }}
+                secureValue: $GOOGLE_CLIENT_SECRET
               - name: Frontend__BaseUrl
-                value: ${{ steps.container_url.outputs.frontend_url }}
+                value: $FRONTEND_URL_VALUE
           ipAddress:
             type: Public
             ports:

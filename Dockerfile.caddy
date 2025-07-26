@@ -1,5 +1,8 @@
 FROM caddy:2.8-alpine
 
+# Install additional tools for debugging
+RUN apk add --no-cache curl wget
+
 # Create directories for logs and data
 RUN mkdir -p /var/log/caddy /data /config
 
@@ -19,8 +22,8 @@ RUN addgroup -g 1001 -S caddyuser && adduser -S caddyuser -G caddyuser
 RUN chown -R caddyuser:caddyuser /var/log/caddy /data /config /etc/caddy
 
 # Health check
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD wget --no-verbose --tries=1 --spider http://localhost:2019/metrics || exit 1
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=5 \
+    CMD caddy version && wget --no-verbose --tries=1 --spider http://localhost:2019/metrics || exit 1
 
 # Switch to non-root user
 USER caddyuser
