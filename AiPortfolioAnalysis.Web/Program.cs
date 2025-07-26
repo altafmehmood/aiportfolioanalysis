@@ -24,37 +24,60 @@ builder.Services.AddOpenApi();
 var googleClientId = builder.Configuration["Authentication:Google:ClientId"];
 var googleClientSecret = builder.Configuration["Authentication:Google:ClientSecret"];
 
-// Validate Google OAuth configuration is always required
+// Validate Google OAuth configuration - allow missing in test environments
+var isDevelopment = builder.Environment.IsDevelopment();
+var isTest = builder.Environment.EnvironmentName.Equals("Test", StringComparison.OrdinalIgnoreCase);
+
 if (string.IsNullOrEmpty(googleClientId) || string.IsNullOrEmpty(googleClientSecret))
 {
     var logger = LoggerFactory.Create(config => config.AddConsole()).CreateLogger("Startup");
-    logger.LogError("Google OAuth configuration is required");
-    logger.LogError("Missing Authentication:Google:ClientId or Authentication:Google:ClientSecret");
-    logger.LogError("Please ensure GOOGLE_CLIENTID and GOOGLE_CLIENTSECRET are configured");
-    throw new InvalidOperationException("Google OAuth configuration is required. Please configure Authentication:Google:ClientId and Authentication:Google:ClientSecret.");
+    
+    if (isDevelopment || isTest)
+    {
+        logger.LogWarning("Google OAuth credentials not configured - authentication will be disabled");
+    }
+    else
+    {
+        logger.LogError("Google OAuth configuration is required");
+        logger.LogError("Missing Authentication:Google:ClientId or Authentication:Google:ClientSecret");
+        logger.LogError("Please ensure GOOGLE_CLIENTID and GOOGLE_CLIENTSECRET are configured");
+        throw new InvalidOperationException("Google OAuth configuration is required. Please configure Authentication:Google:ClientId and Authentication:Google:ClientSecret.");
+    }
 }
 
-builder.Services.AddAuthentication(options =>
+// Configure authentication only if OAuth credentials are available
+bool hasOAuthCredentials = !string.IsNullOrEmpty(googleClientId) && !string.IsNullOrEmpty(googleClientSecret);
+
+if (hasOAuthCredentials)
 {
-    options.DefaultScheme = "Cookies";
-    options.DefaultChallengeScheme = "Google";
-})
-.AddCookie("Cookies", options =>
+    builder.Services.AddAuthentication(options =>
+    {
+        options.DefaultScheme = "Cookies";
+        options.DefaultChallengeScheme = "Google";
+    })
+    .AddCookie("Cookies", options =>
+    {
+            options.Cookie.SameSite = SameSiteMode.Lax;
+        options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
+        options.Cookie.HttpOnly = true; // Secure cookies - use separate tokens for SPA if needed
+        options.ExpireTimeSpan = TimeSpan.FromDays(30);
+        options.SlidingExpiration = true;
+    })
+    .AddGoogle("Google", options =>
+    {
+        options.ClientId = googleClientId!;
+        options.ClientSecret = googleClientSecret!;
+        options.CallbackPath = "/signin-google";
+        options.CorrelationCookie.SameSite = SameSiteMode.Lax;
+        options.CorrelationCookie.SecurePolicy = builder.Environment.IsDevelopment() ? CookieSecurePolicy.SameAsRequest : CookieSecurePolicy.Always;
+    });
+}
+else
 {
-    options.Cookie.SameSite = SameSiteMode.Lax;
-    options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
-    options.Cookie.HttpOnly = true; // Secure cookies - use separate tokens for SPA if needed
-    options.ExpireTimeSpan = TimeSpan.FromDays(30);
-    options.SlidingExpiration = true;
-})
-.AddGoogle("Google", options =>
-{
-    options.ClientId = googleClientId!;
-    options.ClientSecret = googleClientSecret!;
-    options.CallbackPath = "/signin-google";
-    options.CorrelationCookie.SameSite = SameSiteMode.Lax;
-    options.CorrelationCookie.SecurePolicy = builder.Environment.IsDevelopment() ? CookieSecurePolicy.SameAsRequest : CookieSecurePolicy.Always;
-});
+    // Add minimal authentication for test environments
+    builder.Services.AddAuthentication()
+        .AddCookie("Cookies");
+}
 
 builder.Services.AddAuthorization();
 builder.Services.AddHealthChecks();
