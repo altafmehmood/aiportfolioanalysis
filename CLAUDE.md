@@ -473,3 +473,6 @@ az container create --resource-group RG_NAME --file container-group.yaml
 - Full resource allocation
 - Extended health checks with retries
 
+
+
+### Small change to be removed.
