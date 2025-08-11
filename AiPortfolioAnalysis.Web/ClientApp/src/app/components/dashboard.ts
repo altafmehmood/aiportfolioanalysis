@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { Router, ActivatedRoute } from '@angular/router';
 import { AuthService, User } from '../services/auth';
 import { WeatherService, WeatherForecast } from '../services/weather';
+import { skip, take } from 'rxjs';
 
 @Component({
   selector: 'app-dashboard',
@@ -184,16 +185,16 @@ export class DashboardComponent implements OnInit {
   private checkAuthAndRedirect(): void {
     // Initialize auth check
     this.authService.initializeAuth();
-    
-    // Wait a moment for auth to initialize, then check
-    setTimeout(() => {
-      if (!this.authService.isAuthenticated) {
-        this.router.navigate(['/login']);
-      } else {
-        this.user = this.authService.currentUser;
-        this.loadWeatherForecast();
-      }
-    }, 100);
+
+    this.authService.user$
+      .pipe(skip(1), take(1))
+      .subscribe(user => {
+        if (!user) {
+          this.router.navigate(['/login']);
+        } else {
+          this.loadWeatherForecast();
+        }
+      });
   }
 
   loadWeatherForecast(): void {
